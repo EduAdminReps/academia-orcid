@@ -38,6 +38,30 @@ def test_parse_year_filter_invalid():
     assert parse_year_filter("abc") is None
 
 
+def test_parse_year_filter_reversed_range():
+    """Test that reversed year ranges (start > end) are rejected."""
+    assert parse_year_filter("2025-2020") is None
+
+
+def test_parse_year_filter_out_of_bounds_start():
+    """Test that years before 1900 are rejected."""
+    assert parse_year_filter("1800-2020") is None
+    assert parse_year_filter("1899") is None
+
+
+def test_parse_year_filter_out_of_bounds_end():
+    """Test that years after 2100 are rejected."""
+    assert parse_year_filter("2020-2101") is None
+    assert parse_year_filter("3000") is None
+
+
+def test_parse_year_filter_boundary_valid():
+    """Test that boundary years (1900, 2100) are accepted."""
+    assert parse_year_filter("1900-2100") == (1900, 2100)
+    assert parse_year_filter("1900") == (1900, 1900)
+    assert parse_year_filter("2100") == (2100, 2100)
+
+
 # ── filter_publications_by_year ────────────────────────────────────────────
 
 

@@ -1,6 +1,7 @@
 """Command-line interface for generating ORCID LaTeX sections."""
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -21,8 +22,25 @@ from academia_orcid.extract import (
 from academia_orcid.fetch import (
     get_or_fetch_orcid_record,
     get_orcid_for_uin,
+    validate_orcid_id,
 )
 from academia_orcid.latex import generate_data_latex, generate_latex, generate_unavailable_latex
+
+
+def validate_uin(uin: str) -> bool:
+    """Validate UIN format.
+
+    UINs must be exactly 9 digits.
+
+    Args:
+        uin: The UIN to validate
+
+    Returns:
+        True if valid format, False otherwise
+    """
+    if not uin or not isinstance(uin, str):
+        return False
+    return bool(re.match(r'^\d{9}$', uin))
 
 
 def _write_unavailable(output_path: Path, output_filename: str, section: str, reason: str):
@@ -108,11 +126,24 @@ def main():
     if args.orcid:
         # Direct ORCID ID provided — skip UIN mapping
         orcid_id = args.orcid
+
+        # Validate ORCID ID format
+        if not validate_orcid_id(orcid_id):
+            print(f"Error: Invalid ORCID ID format: {orcid_id}", file=sys.stderr)
+            print("ORCID IDs must match the pattern: XXXX-XXXX-XXXX-XXXX", file=sys.stderr)
+            sys.exit(1)
+
         dept = None
         print(f"Using ORCID ID directly: {orcid_id}", file=sys.stderr)
     else:
         # UIN provided — look up ORCID ID from mapping database
         uin = args.uin
+
+        # Validate UIN format
+        if not validate_uin(uin):
+            print(f"Error: Invalid UIN format: {uin}", file=sys.stderr)
+            print("UINs must be exactly 9 digits", file=sys.stderr)
+            sys.exit(1)
 
         if not args.mapping_db:
             print("Error: --mapping-db is required when using --uin", file=sys.stderr)

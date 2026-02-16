@@ -1,6 +1,7 @@
 """ORCID API fetching, caching, and UIN-to-ORCID mapping."""
 
 import json
+import re
 import sqlite3
 import sys
 import time
@@ -11,6 +12,51 @@ try:
     REQUESTS_AVAILABLE = True
 except ImportError:
     REQUESTS_AVAILABLE = False
+
+
+# SECURITY: ORCID ID format validation to prevent path traversal
+_ORCID_ID_PATTERN = re.compile(r'^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$')
+
+
+def validate_orcid_id(orcid_id: str) -> bool:
+    """Validate ORCID ID format.
+
+    ORCID IDs must match the pattern: XXXX-XXXX-XXXX-XXXX where X is a digit,
+    and the last character can be a digit or 'X'.
+
+    This prevents path traversal attacks via malicious ORCID IDs like '../../../etc/passwd'.
+
+    Args:
+        orcid_id: The ORCID ID to validate
+
+    Returns:
+        True if valid format, False otherwise
+    """
+    if not orcid_id or not isinstance(orcid_id, str):
+        return False
+    return _ORCID_ID_PATTERN.match(orcid_id) is not None
+
+
+def sanitize_dept(dept: str | None) -> str | None:
+    """Sanitize department parameter to prevent path traversal.
+
+    Only allows alphanumeric characters, underscores, and hyphens.
+    Rejects any path components like '..' or '/'.
+
+    Args:
+        dept: Department code to sanitize
+
+    Returns:
+        Sanitized department code, or None if invalid/None
+    """
+    if not dept:
+        return None
+
+    # Only allow alphanumeric, underscore, and hyphen
+    if not re.match(r'^[a-zA-Z0-9_-]+$', dept):
+        return None
+
+    return dept
 
 
 def get_orcid_for_uin(db_path: Path, uin: str) -> str | None:
@@ -33,28 +79,48 @@ def get_orcid_for_uin(db_path: Path, uin: str) -> str | None:
 
 def load_orcid_record(data_dir: Path, orcid_id: str, dept: str = None) -> dict | None:
     """Load ORCID JSON record from cache."""
+    # SECURITY: Validate ORCID ID format to prevent path traversal
+    if not validate_orcid_id(orcid_id):
+        print(f"Error: Invalid ORCID ID format: {orcid_id}", file=sys.stderr)
+        return None
+
+    # SECURITY: Sanitize department parameter
+    dept = sanitize_dept(dept)
+
     json_dir = data_dir / "ORCID_JSON"
 
     # Try hierarchical structure first (ORCID_JSON/DEPT/orcid.json)
     if dept:
         json_file = json_dir / dept / f"{orcid_id}.json"
         if json_file.exists():
-            with open(json_file, encoding="utf-8") as f:
-                return json.load(f)
+            try:
+                with open(json_file, encoding="utf-8") as f:
+                    return json.load(f)
+            except json.JSONDecodeError as e:
+                print(f"Error: Failed to parse JSON from {json_file}: {e}", file=sys.stderr)
+                return None
 
     # Try flat structure (ORCID_JSON/orcid.json)
     json_file = json_dir / f"{orcid_id}.json"
     if json_file.exists():
-        with open(json_file, encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(json_file, encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            print(f"Error: Failed to parse JSON from {json_file}: {e}", file=sys.stderr)
+            return None
 
     # Search all subdirectories
     for subdir in json_dir.iterdir():
         if subdir.is_dir():
             json_file = subdir / f"{orcid_id}.json"
             if json_file.exists():
-                with open(json_file, encoding="utf-8") as f:
-                    return json.load(f)
+                try:
+                    with open(json_file, encoding="utf-8") as f:
+                        return json.load(f)
+                except json.JSONDecodeError as e:
+                    print(f"Error: Failed to parse JSON from {json_file}: {e}", file=sys.stderr)
+                    return None
 
     return None
 
@@ -62,6 +128,11 @@ def load_orcid_record(data_dir: Path, orcid_id: str, dept: str = None) -> dict |
 def fetch_work_details(orcid_id: str, put_code: str, max_retries: int = 3) -> dict | None:
     """Fetch detailed work information from ORCID API."""
     if not REQUESTS_AVAILABLE:
+        return None
+
+    # SECURITY: Validate ORCID ID format to prevent injection
+    if not validate_orcid_id(orcid_id):
+        print(f"Error: Invalid ORCID ID format: {orcid_id}", file=sys.stderr)
         return None
 
     url = f"https://pub.orcid.org/v3.0/{orcid_id}/work/{put_code}"
@@ -72,13 +143,18 @@ def fetch_work_details(orcid_id: str, put_code: str, max_retries: int = 3) -> di
         try:
             response = requests.get(url, headers=headers, timeout=30)
             if response.status_code == 200:
-                return response.json()
+                try:
+                    return response.json()
+                except json.JSONDecodeError as e:
+                    print(f"Error: Failed to parse JSON response for work {put_code}: {e}", file=sys.stderr)
+                    return None
             elif response.status_code == 429:  # Rate limited
                 time.sleep(delay)
                 delay *= 2
             else:
                 return None
-        except Exception:
+        except (requests.RequestException, requests.Timeout) as e:
+            print(f"Warning: Network error fetching work {put_code} (attempt {attempt + 1}/{max_retries}): {type(e).__name__}", file=sys.stderr)
             if attempt < max_retries - 1:
                 time.sleep(delay)
                 delay *= 2
@@ -103,6 +179,14 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path, dept: str = None) -> dict 
         print("Warning: requests library not available, cannot fetch ORCID record", file=sys.stderr)
         return None
 
+    # SECURITY: Validate ORCID ID format to prevent injection
+    if not validate_orcid_id(orcid_id):
+        print(f"Error: Invalid ORCID ID format: {orcid_id}", file=sys.stderr)
+        return None
+
+    # SECURITY: Sanitize department parameter
+    dept = sanitize_dept(dept)
+
     print(f"Fetching ORCID record for {orcid_id} from API...", file=sys.stderr)
 
     url = f"https://pub.orcid.org/v3.0/{orcid_id}/record"
@@ -114,7 +198,12 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path, dept: str = None) -> dict 
             print(f"Warning: ORCID API returned {response.status_code} for {orcid_id}", file=sys.stderr)
             return None
 
-        record = response.json()
+        try:
+            record = response.json()
+        except json.JSONDecodeError as e:
+            print(f"Error: Failed to parse JSON response for {orcid_id}: {e}", file=sys.stderr)
+            return None
+
         print(f"Successfully fetched main record for {orcid_id}", file=sys.stderr)
 
         # Fetch detailed work information for each work
@@ -148,8 +237,11 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path, dept: str = None) -> dict 
         print(f"Cached ORCID record to {cache_file}", file=sys.stderr)
         return record
 
-    except Exception as e:
-        print(f"Warning: Failed to fetch ORCID record for {orcid_id}: {e}", file=sys.stderr)
+    except (requests.RequestException, requests.Timeout) as e:
+        print(f"Warning: Network error fetching ORCID record for {orcid_id}: {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+    except OSError as e:
+        print(f"Warning: Failed to write cache file for {orcid_id}: {e}", file=sys.stderr)
         return None
 
 
@@ -172,6 +264,14 @@ def get_or_fetch_orcid_record(
     Returns:
         ORCID record dict, or None if not found/fetch failed
     """
+    # SECURITY: Validate ORCID ID format (defense in depth - also checked in called functions)
+    if not validate_orcid_id(orcid_id):
+        print(f"Error: Invalid ORCID ID format: {orcid_id}", file=sys.stderr)
+        return None
+
+    # SECURITY: Sanitize department parameter
+    dept = sanitize_dept(dept)
+
     # Force fetch: skip cache entirely
     if force and fetch:
         print("Force fetching ORCID record (ignoring cache)...", file=sys.stderr)

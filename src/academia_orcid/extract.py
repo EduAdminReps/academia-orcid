@@ -28,6 +28,20 @@ def parse_year_filter(year_arg: str | None) -> tuple[int, int] | None:
             try:
                 start = int(parts[0])
                 end = int(parts[1])
+
+                # Validate year bounds (1900-2100 is reasonable range)
+                if start < 1900 or start > 2100:
+                    print(f"Warning: Start year {start} out of reasonable range (1900-2100), ignoring filter", file=sys.stderr)
+                    return None
+                if end < 1900 or end > 2100:
+                    print(f"Warning: End year {end} out of reasonable range (1900-2100), ignoring filter", file=sys.stderr)
+                    return None
+
+                # Validate start <= end
+                if start > end:
+                    print(f"Warning: Invalid year range '{year_arg}' (start > end), ignoring filter", file=sys.stderr)
+                    return None
+
                 return (start, end)
             except ValueError:
                 print(f"Warning: Invalid year range '{year_arg}', ignoring filter", file=sys.stderr)
@@ -36,6 +50,12 @@ def parse_year_filter(year_arg: str | None) -> tuple[int, int] | None:
     # Single year format: YYYY
     try:
         year = int(year_arg)
+
+        # Validate year bounds
+        if year < 1900 or year > 2100:
+            print(f"Warning: Year {year} out of reasonable range (1900-2100), ignoring filter", file=sys.stderr)
+            return None
+
         return (year, year)
     except ValueError:
         print(f"Warning: Invalid year '{year_arg}', ignoring filter", file=sys.stderr)
@@ -184,7 +204,9 @@ def extract_publications(record: dict) -> tuple[list, list, list]:
                 # Include other types (books, book chapters, etc.)
                 other_publications.append(pub_entry)
 
-        except Exception:
+        except (KeyError, AttributeError, TypeError, ValueError, IndexError) as e:
+            # Skip malformed work entries (missing fields, unexpected structure)
+            print(f"Warning: Skipping malformed work entry: {type(e).__name__}", file=sys.stderr)
             continue
 
     # Sort by year (descending)
