@@ -1,0 +1,67 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Unit test / coverage reports
+.coverage
+.coverage.*
+.pytest_cache/
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Ruff
+.ruff_cache/
+
+# mypy
+.mypy_cache/
+
+# ORCID data (cached, not tracked)
+ORCID_JSON/
+
+# Security - sensitive files and credentials
+*.json
+!package.json
+!package-lock.json
+.gcloud/
+.config/
+*.key
+*.pem
+*.p12
+*.pfx
+service-account*.json
+credentials*.json
+*-credentials.json
+secrets/
+
+# Data files (prevent accidental commits)
+*.csv
+*.db
+*.sqlite
+*.xlsx
+*.xls
+
+# Project-specific
+outputs/
+*.log
