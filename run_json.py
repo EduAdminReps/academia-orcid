@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from academia_orcid import SECTION_DATA, SECTION_PUBLICATIONS, VALID_SECTIONS
+from academia_orcid.config import get_config
 from academia_orcid.extract import (
     extract_biography,
     extract_distinctions,
@@ -55,8 +56,17 @@ def main():
     parser.add_argument("--no-fetch", action="store_true")
     parser.add_argument("--force-fetch", action="store_true")
     parser.add_argument("--mapping-db", default=None, help="Path to SQLite with orcid_mapping")
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="Path to YAML configuration file (optional, defaults to .academia-orcid.yaml)"
+    )
 
     args = parser.parse_args()
+
+    # Load configuration (if specified via --config, or from default locations)
+    config_file = Path(args.config) if args.config else None
+    config = get_config(config_file)
 
     if not args.uin and not args.orcid:
         parser.error("Either --uin or --orcid is required")
@@ -131,9 +141,10 @@ def main():
         return
 
     # Write JSON output
+    config = get_config()
     output_path.mkdir(parents=True, exist_ok=True)
     output_file = output_path / output_filename
-    output_file.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    output_file.write_text(json.dumps(data, indent=config.json_indent, ensure_ascii=False))
 
     print(f"Generated: {output_file}", file=sys.stderr)
     print(str(output_file))

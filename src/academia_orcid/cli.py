@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from academia_orcid import SECTION_DATA, SECTION_PUBLICATIONS, VALID_SECTIONS
+from academia_orcid.config import get_config
 from academia_orcid.extract import (
     extract_biography,
     extract_distinctions,
@@ -94,8 +95,18 @@ def main():
         default=None,
         help="Path to SQLite database with orcid_mapping table (required when using --uin)"
     )
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="Path to YAML configuration file (optional, defaults to .academia-orcid.yaml)"
+    )
 
     args = parser.parse_args()
+
+    # Load configuration (if specified via --config, or from default locations)
+    config_file = Path(args.config) if args.config else None
+    config = get_config(config_file)
+    print(f"Using configuration (cache TTL: {config.cache_ttl}s, API timeout: {config.api_timeout}s)", file=sys.stderr)
 
     # Validate: need either --uin or --orcid
     if not args.uin and not args.orcid:

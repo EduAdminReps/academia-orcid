@@ -3,6 +3,8 @@
 import html
 import sys
 
+from .config import get_config
+
 
 def parse_year_filter(year_arg: str | None) -> tuple[int, int] | None:
     """Parse year argument into a (start_year, end_year) tuple.
@@ -174,8 +176,10 @@ def extract_publications(record: dict) -> tuple[list, list, list]:
                             break
 
             # Format authors (IEEE style: Last, F.M.)
+            config = get_config()
+            author_limit = config.author_limit
             formatted_authors = []
-            for author in author_names[:5]:  # Limit to first 5 authors
+            for author in author_names[:author_limit]:  # Limit to configured number of authors
                 parts = author.split()
                 if len(parts) > 1:
                     last_name = parts[-1]
@@ -184,7 +188,7 @@ def extract_publications(record: dict) -> tuple[list, list, list]:
                 else:
                     formatted_authors.append(author)
 
-            if len(author_names) > 5:
+            if len(author_names) > author_limit:
                 formatted_authors.append("et al.")
 
             pub_entry = {
