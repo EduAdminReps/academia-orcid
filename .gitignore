@@ -43,6 +43,9 @@ htmlcov/
 # ORCID data (cached, not tracked)
 ORCID_JSON/
 
+# Configuration files (user-specific, not tracked)
+.academia-orcid.yaml
+
 # Security - sensitive files and credentials
 .gcloud/
 .config/

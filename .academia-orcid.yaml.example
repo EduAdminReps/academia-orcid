@@ -1,0 +1,51 @@
+# Example configuration file for academia-orcid
+# Copy this file to .academia-orcid.yaml and customize as needed
+#
+# Default search locations:
+#   1. ./.academia-orcid.yaml (current directory)
+#   2. ~/.academia-orcid.yaml (home directory)
+#   3. /etc/academia-orcid/config.yaml (system-wide)
+#
+# You can also specify a custom config file with --config flag
+
+# API Configuration
+api:
+  # ORCID Public API base URL
+  base_url: "https://pub.orcid.org/v3.0"
+
+  # Timeout for main ORCID record fetch (seconds)
+  timeout: 60
+
+  # Timeout for individual work detail fetch (seconds)
+  work_detail_timeout: 30
+
+  # Maximum number of retries on network errors
+  max_retries: 3
+
+  # Delay between API calls for rate limiting (seconds)
+  rate_limit_delay: 0.3
+
+  # Initial backoff delay for 429 rate limit responses (seconds)
+  rate_limit_backoff: 0.5
+
+# Cache Configuration
+cache:
+  # Cache time-to-live in seconds (default: 7 days)
+  # After this period, cached records are considered stale and refetched
+  ttl_seconds: 604800  # 7 * 24 * 60 * 60
+
+  # Cache directory name (relative to --data-dir)
+  dir_name: "ORCID_JSON"
+
+# Output Configuration
+output:
+  # Maximum number of authors to display before "et al."
+  author_limit: 5
+
+  # JSON indentation level (for run_json.py output)
+  json_indent: 2
+
+# Environment variable overrides (highest priority):
+#   ORCID_API_BASE_URL    - Override api.base_url
+#   ORCID_CACHE_TTL       - Override cache.ttl_seconds (integer)
+#   ORCID_API_TIMEOUT     - Override api.timeout (integer)
