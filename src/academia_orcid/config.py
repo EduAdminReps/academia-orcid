@@ -4,9 +4,13 @@ Loads settings from YAML configuration file with sensible defaults.
 Supports environment variable overrides for sensitive settings.
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
+
+# Module logger
+logger = logging.getLogger("academia_orcid.config")
 
 try:
     import yaml
@@ -24,6 +28,7 @@ DEFAULT_CONFIG = {
         "max_retries": 3,
         "rate_limit_delay": 0.3,
         "rate_limit_backoff": 0.5,
+        "max_concurrent_requests": 5,  # Max concurrent work detail fetches
     },
     "cache": {
         "ttl_seconds": 7 * 24 * 60 * 60,  # 7 days
@@ -65,7 +70,7 @@ class Config:
             config_file: Path to YAML config file
         """
         if not YAML_AVAILABLE:
-            print(f"Warning: PyYAML not available, cannot load config from {config_file}")
+            logger.warning(f"PyYAML not available, cannot load config from {config_file}")
             return
 
         try:
@@ -75,7 +80,7 @@ class Config:
             if user_config:
                 self._merge_config(user_config)
         except Exception as e:
-            print(f"Warning: Failed to load config from {config_file}: {e}")
+            logger.warning(f"Failed to load config from {config_file}: {e}")
 
     def _merge_config(self, user_config: dict) -> None:
         """Merge user configuration with defaults.
@@ -154,6 +159,11 @@ class Config:
     def rate_limit_backoff(self) -> float:
         """Get rate limit backoff initial delay in seconds."""
         return self.get("api", "rate_limit_backoff")
+
+    @property
+    def max_concurrent_requests(self) -> int:
+        """Get maximum number of concurrent API requests."""
+        return self.get("api", "max_concurrent_requests")
 
     @property
     def cache_ttl(self) -> int:

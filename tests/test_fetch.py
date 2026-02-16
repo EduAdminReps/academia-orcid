@@ -452,11 +452,11 @@ def test_fetch_work_details_no_requests_library():
 
 
 @patch('academia_orcid.fetch.REQUESTS_AVAILABLE', False)
-def test_fetch_orcid_record_no_requests_library(tmp_path, capsys):
+def test_fetch_orcid_record_no_requests_library(tmp_path, caplog):
     """Test handling when requests library is not available."""
     result = fetch_orcid_record("0000-0001-2345-6789", tmp_path)
 
     assert result is None
 
-    captured = capsys.readouterr()
-    assert "requests library not available" in captured.err
+    # Check log messages instead of stderr
+    assert "requests library not available" in caplog.text

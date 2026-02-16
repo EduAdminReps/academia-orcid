@@ -28,6 +28,11 @@ api:
   # Initial backoff delay for 429 rate limit responses (seconds)
   rate_limit_backoff: 0.5
 
+  # Maximum concurrent requests when fetching work details
+  # Higher values = faster fetching, but respect API rate limits
+  # Recommended: 5-10 for public API
+  max_concurrent_requests: 5
+
 # Cache Configuration
 cache:
   # Cache time-to-live in seconds (default: 7 days)

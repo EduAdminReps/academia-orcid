@@ -1,9 +1,13 @@
 """Extract publication and data fields from ORCID records."""
 
 import html
+import logging
 import sys
 
 from .config import get_config
+
+# Module logger
+logger = logging.getLogger("academia_orcid.extract")
 
 
 def parse_year_filter(year_arg: str | None) -> tuple[int, int] | None:
@@ -33,20 +37,20 @@ def parse_year_filter(year_arg: str | None) -> tuple[int, int] | None:
 
                 # Validate year bounds (1900-2100 is reasonable range)
                 if start < 1900 or start > 2100:
-                    print(f"Warning: Start year {start} out of reasonable range (1900-2100), ignoring filter", file=sys.stderr)
+                    logger.warning(f"Start year {start} out of reasonable range (1900-2100), ignoring filter")
                     return None
                 if end < 1900 or end > 2100:
-                    print(f"Warning: End year {end} out of reasonable range (1900-2100), ignoring filter", file=sys.stderr)
+                    logger.warning(f"End year {end} out of reasonable range (1900-2100), ignoring filter")
                     return None
 
                 # Validate start <= end
                 if start > end:
-                    print(f"Warning: Invalid year range '{year_arg}' (start > end), ignoring filter", file=sys.stderr)
+                    logger.warning(f"Invalid year range '{year_arg}' (start > end), ignoring filter")
                     return None
 
                 return (start, end)
             except ValueError:
-                print(f"Warning: Invalid year range '{year_arg}', ignoring filter", file=sys.stderr)
+                logger.warning(f"Invalid year range '{year_arg}', ignoring filter")
                 return None
 
     # Single year format: YYYY
@@ -55,12 +59,12 @@ def parse_year_filter(year_arg: str | None) -> tuple[int, int] | None:
 
         # Validate year bounds
         if year < 1900 or year > 2100:
-            print(f"Warning: Year {year} out of reasonable range (1900-2100), ignoring filter", file=sys.stderr)
+            logger.warning(f"Year {year} out of reasonable range (1900-2100), ignoring filter")
             return None
 
         return (year, year)
     except ValueError:
-        print(f"Warning: Invalid year '{year_arg}', ignoring filter", file=sys.stderr)
+        logger.warning(f"Invalid year '{year_arg}', ignoring filter")
         return None
 
 
@@ -210,7 +214,7 @@ def extract_publications(record: dict) -> tuple[list, list, list]:
 
         except (KeyError, AttributeError, TypeError, ValueError, IndexError) as e:
             # Skip malformed work entries (missing fields, unexpected structure)
-            print(f"Warning: Skipping malformed work entry: {type(e).__name__}", file=sys.stderr)
+            logger.warning(f"Skipping malformed work entry: {type(e).__name__}")
             continue
 
     # Sort by year (descending)

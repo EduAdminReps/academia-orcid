@@ -11,11 +11,13 @@ Output:
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 
 from academia_orcid import SECTION_DATA, SECTION_PUBLICATIONS, VALID_SECTIONS
 from academia_orcid.config import get_config
+from academia_orcid.logging_config import setup_logging
 from academia_orcid.extract import (
     extract_biography,
     extract_distinctions,
@@ -61,8 +63,24 @@ def main():
         default=None,
         help="Path to YAML configuration file (optional, defaults to .academia-orcid.yaml)"
     )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging level (default: INFO)"
+    )
+    parser.add_argument(
+        "--log-file",
+        default=None,
+        help="Optional log file path (logs to stderr if not specified)"
+    )
 
     args = parser.parse_args()
+
+    # Setup logging
+    log_file = Path(args.log_file) if args.log_file else None
+    setup_logging(level=args.log_level, log_file=log_file)
+    logger = logging.getLogger("academia_orcid.run_json")
 
     # Load configuration (if specified via --config, or from default locations)
     config_file = Path(args.config) if args.config else None
@@ -87,29 +105,29 @@ def main():
     # Resolve ORCID ID
     if args.orcid:
         orcid_id = args.orcid
-        print(f"Using ORCID ID directly: {orcid_id}", file=sys.stderr)
+        logger.info(f"Using ORCID ID directly: {orcid_id}")
     else:
         uin = args.uin
         if not args.mapping_db:
-            print("Error: --mapping-db is required when using --uin", file=sys.stderr)
+            logger.error("--mapping-db is required when using --uin")
             sys.exit(1)
 
         db_path = Path(args.mapping_db)
         if not db_path.exists():
-            print(f"Error: Mapping database not found: {db_path}", file=sys.stderr)
+            logger.error(f"Mapping database not found: {db_path}")
             sys.exit(1)
 
         orcid_id = get_orcid_for_uin(db_path, uin)
         if not orcid_id:
-            print(f"Warning: No ORCID ID found for UIN {uin}; skipping.", file=sys.stderr)
+            logger.warning(f"No ORCID ID found for UIN {uin}; skipping.")
             return
 
-        print(f"Found ORCID {orcid_id} for UIN {uin}", file=sys.stderr)
+        logger.info(f"Found ORCID {orcid_id} for UIN {uin}")
 
     # Load ORCID record
     record = get_or_fetch_orcid_record(data_path, orcid_id, None, fetch=fetch_enabled, force=force_fetch)
     if not record:
-        print(f"Warning: No ORCID record found for {orcid_id}; skipping.", file=sys.stderr)
+        logger.warning(f"No ORCID record found for {orcid_id}; skipping.")
         return
 
     # Extract and export
@@ -137,7 +155,7 @@ def main():
 
     # Don't write file if no data
     if not data:
-        print(f"No {section} data found; skipping file creation.", file=sys.stderr)
+        logger.info(f"No {section} data found; skipping file creation.")
         return
 
     # Write JSON output
@@ -146,7 +164,7 @@ def main():
     output_file = output_path / output_filename
     output_file.write_text(json.dumps(data, indent=config.json_indent, ensure_ascii=False))
 
-    print(f"Generated: {output_file}", file=sys.stderr)
+    logger.info(f"Generated: {output_file}")
     print(str(output_file))
 
 

@@ -1,12 +1,14 @@
 """Command-line interface for generating ORCID LaTeX sections."""
 
 import argparse
+import logging
 import re
 import sys
 from pathlib import Path
 
 from academia_orcid import SECTION_DATA, SECTION_PUBLICATIONS, VALID_SECTIONS
 from academia_orcid.config import get_config
+from academia_orcid.logging_config import setup_logging
 from academia_orcid.extract import (
     extract_biography,
     extract_distinctions,
@@ -44,12 +46,12 @@ def validate_uin(uin: str) -> bool:
     return bool(re.match(r'^\d{9}$', uin))
 
 
-def _write_unavailable(output_path: Path, output_filename: str, section: str, reason: str):
+def _write_unavailable(output_path: Path, output_filename: str, section: str, reason: str, logger: logging.Logger):
     """Write a placeholder LaTeX file when ORCID data is unavailable."""
     output_path.mkdir(parents=True, exist_ok=True)
     section_file = output_path / output_filename
     section_file.write_text(generate_unavailable_latex(section, reason))
-    print(f"Generated (placeholder): {section_file}", file=sys.stderr)
+    logger.info(f"Generated (placeholder): {section_file}")
     print(str(section_file))
 
 
@@ -100,13 +102,29 @@ def main():
         default=None,
         help="Path to YAML configuration file (optional, defaults to .academia-orcid.yaml)"
     )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging level (default: INFO)"
+    )
+    parser.add_argument(
+        "--log-file",
+        default=None,
+        help="Optional log file path (logs to stderr if not specified)"
+    )
 
     args = parser.parse_args()
+
+    # Setup logging
+    log_file = Path(args.log_file) if args.log_file else None
+    setup_logging(level=args.log_level, log_file=log_file)
+    logger = logging.getLogger("academia_orcid.cli")
 
     # Load configuration (if specified via --config, or from default locations)
     config_file = Path(args.config) if args.config else None
     config = get_config(config_file)
-    print(f"Using configuration (cache TTL: {config.cache_ttl}s, API timeout: {config.api_timeout}s)", file=sys.stderr)
+    logger.debug(f"Using configuration (cache TTL: {config.cache_ttl}s, API timeout: {config.api_timeout}s)")
 
     # Validate: need either --uin or --orcid
     if not args.uin and not args.orcid:
@@ -123,9 +141,9 @@ def main():
 
     # Log year filter status
     if args.year and section == SECTION_DATA:
-        print("Note: --year is ignored for --section data (all data included)", file=sys.stderr)
+        logger.info("Note: --year is ignored for --section data (all data included)")
     elif year_filter:
-        print(f"Year filter: {year_filter[0]}-{year_filter[1]}", file=sys.stderr)
+        logger.info(f"Year filter: {year_filter[0]}-{year_filter[1]}")
 
     # Determine output file based on section type
     if section == SECTION_PUBLICATIONS:
@@ -140,29 +158,29 @@ def main():
 
         # Validate ORCID ID format
         if not validate_orcid_id(orcid_id):
-            print(f"Error: Invalid ORCID ID format: {orcid_id}", file=sys.stderr)
-            print("ORCID IDs must match the pattern: XXXX-XXXX-XXXX-XXXX", file=sys.stderr)
+            logger.error(f"Invalid ORCID ID format: {orcid_id}")
+            logger.error("ORCID IDs must match the pattern: XXXX-XXXX-XXXX-XXXX")
             sys.exit(1)
 
         dept = None
-        print(f"Using ORCID ID directly: {orcid_id}", file=sys.stderr)
+        logger.info(f"Using ORCID ID directly: {orcid_id}")
     else:
         # UIN provided — look up ORCID ID from mapping database
         uin = args.uin
 
         # Validate UIN format
         if not validate_uin(uin):
-            print(f"Error: Invalid UIN format: {uin}", file=sys.stderr)
-            print("UINs must be exactly 9 digits", file=sys.stderr)
+            logger.error(f"Invalid UIN format: {uin}")
+            logger.error("UINs must be exactly 9 digits")
             sys.exit(1)
 
         if not args.mapping_db:
-            print("Error: --mapping-db is required when using --uin", file=sys.stderr)
+            logger.error("--mapping-db is required when using --uin")
             sys.exit(1)
 
         db_path = Path(args.mapping_db)
         if not db_path.exists():
-            print(f"Error: Mapping database not found: {db_path}", file=sys.stderr)
+            logger.error(f"Mapping database not found: {db_path}")
             sys.exit(1)
 
         orcid_id = get_orcid_for_uin(db_path, uin)
@@ -170,18 +188,18 @@ def main():
 
         if not orcid_id:
             reason = "No ORCID ID on file for this faculty member."
-            print(f"Warning: No ORCID ID found for UIN {uin}; writing placeholder.", file=sys.stderr)
-            _write_unavailable(output_path, output_filename, section, reason)
+            logger.warning(f"No ORCID ID found for UIN {uin}; writing placeholder.")
+            _write_unavailable(output_path, output_filename, section, reason, logger)
             return
 
-        print(f"Found ORCID {orcid_id} for UIN {uin}", file=sys.stderr)
+        logger.info(f"Found ORCID {orcid_id} for UIN {uin}")
 
     # Load ORCID record from cache, or fetch from API if not cached
     record = get_or_fetch_orcid_record(data_path, orcid_id, dept, fetch=fetch_enabled, force=force_fetch)
     if not record:
         reason = f"ORCID record unavailable for {orcid_id}."
-        print(f"Warning: No ORCID record found for {orcid_id}; writing placeholder.", file=sys.stderr)
-        _write_unavailable(output_path, output_filename, section, reason)
+        logger.warning(f"No ORCID record found for {orcid_id}; writing placeholder.")
+        _write_unavailable(output_path, output_filename, section, reason, logger)
         return
 
     if section == SECTION_PUBLICATIONS:
@@ -195,9 +213,9 @@ def main():
             conference_papers = filter_publications_by_year(conference_papers, year_filter)
             other_publications = filter_publications_by_year(other_publications, year_filter)
             total_after = len(journal_articles) + len(conference_papers) + len(other_publications)
-            print(f"Found {total_before} publications, {total_after} after year filter ({year_filter[0]}-{year_filter[1]})", file=sys.stderr)
+            logger.info(f"Found {total_before} publications, {total_after} after year filter ({year_filter[0]}-{year_filter[1]})")
         else:
-            print(f"Found {len(journal_articles)} journal articles, {len(conference_papers)} conference papers, {len(other_publications)} other", file=sys.stderr)
+            logger.info(f"Found {len(journal_articles)} journal articles, {len(conference_papers)} conference papers, {len(other_publications)} other")
 
         # Generate LaTeX
         latex = generate_latex(orcid_id, journal_articles, conference_papers, other_publications)
@@ -212,10 +230,10 @@ def main():
         memberships = extract_memberships(record)
         services = extract_services(record)
 
-        print(f"Found: {len(external_identifiers)} external IDs, {len(fundings)} fundings, "
-              f"{len(employments)} employments, {len(educations)} educations, "
-              f"{len(distinctions)} distinctions, {len(memberships)} memberships, "
-              f"{len(services)} services", file=sys.stderr)
+        logger.info(f"Found: {len(external_identifiers)} external IDs, {len(fundings)} fundings, "
+                    f"{len(employments)} employments, {len(educations)} educations, "
+                    f"{len(distinctions)} distinctions, {len(memberships)} memberships, "
+                    f"{len(services)} services")
 
         # Generate LaTeX
         latex = generate_data_latex(
@@ -225,7 +243,7 @@ def main():
 
     # Don't write file if no data (composer uses file existence to decide inclusion)
     if not latex:
-        print(f"No {section} data found; skipping file creation.", file=sys.stderr)
+        logger.info(f"No {section} data found; skipping file creation.")
         return
 
     # Write output
@@ -233,5 +251,5 @@ def main():
     section_file = output_path / output_filename
     section_file.write_text(latex)
 
-    print(f"Generated: {section_file}", file=sys.stderr)
+    logger.info(f"Generated: {section_file}")
     print(str(section_file))
