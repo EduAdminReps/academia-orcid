@@ -31,6 +31,9 @@ htmlcov/
 # Claude Code
 .claude/
 
+# Codex
+.codex/
+
 # macOS
 .DS_Store
 

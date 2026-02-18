@@ -94,6 +94,25 @@ class Config:
             else:
                 self._config[section] = values
 
+        # Validate security-sensitive values after merge
+        self._validate_config()
+
+    def _validate_config(self) -> None:
+        """Validate security-sensitive configuration values."""
+        # api.base_url must be HTTPS
+        base_url = self._config.get("api", {}).get("base_url", "")
+        if base_url and not base_url.startswith("https://"):
+            logger.warning(f"Rejecting non-HTTPS api.base_url: {base_url}")
+            self._config["api"]["base_url"] = DEFAULT_CONFIG["api"]["base_url"]
+
+        # cache.dir_name must be a simple name (no path separators or traversal)
+        dir_name = self._config.get("cache", {}).get("dir_name", "")
+        if dir_name and (
+            "/" in dir_name or "\\" in dir_name or ".." in dir_name
+        ):
+            logger.warning(f"Rejecting unsafe cache.dir_name: {dir_name}")
+            self._config["cache"]["dir_name"] = DEFAULT_CONFIG["cache"]["dir_name"]
+
     def _apply_env_overrides(self) -> None:
         """Apply environment variable overrides.
 

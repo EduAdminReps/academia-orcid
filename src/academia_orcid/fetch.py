@@ -167,7 +167,9 @@ def load_orcid_record(data_dir: Path, orcid_id: str, dept: str = None) -> dict |
             logger.error(f"Failed to parse JSON from {json_file}: {e}")
             return None
 
-    # Search all subdirectories
+    # Search all subdirectories (guard against missing cache dir)
+    if not json_dir.is_dir():
+        return None
     for subdir in json_dir.iterdir():
         if subdir.is_dir():
             json_file = subdir / f"{orcid_id}.json"

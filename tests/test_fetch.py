@@ -158,6 +158,16 @@ def test_load_orcid_record_sanitizes_dept(tmp_data_dir):
     assert record is not None  # From tmp_data_dir fixture
 
 
+# ── SECURITY: Missing cache directory ─────────────────────────────────────
+
+
+def test_load_orcid_record_missing_cache_dir(tmp_path):
+    """load_orcid_record returns None (not crash) when cache dir is missing."""
+    # tmp_path exists but has no ORCID_JSON subdirectory
+    record = load_orcid_record(tmp_path, "0000-0001-2345-6789")
+    assert record is None
+
+
 # ── SECURITY: JSON parsing error handling ─────────────────────────────────
 
 

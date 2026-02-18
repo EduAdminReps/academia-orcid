@@ -31,7 +31,8 @@ from academia_orcid.extract import (
     filter_publications_by_year,
     parse_year_filter,
 )
-from academia_orcid.fetch import get_or_fetch_orcid_record, get_orcid_for_uin
+from academia_orcid.cli import validate_uin
+from academia_orcid.fetch import get_or_fetch_orcid_record, get_orcid_for_uin, validate_orcid_id
 from academia_orcid.json_export import export_data, export_publications
 
 
@@ -105,9 +106,23 @@ def main():
     # Resolve ORCID ID
     if args.orcid:
         orcid_id = args.orcid
+
+        # Validate ORCID ID format
+        if not validate_orcid_id(orcid_id):
+            logger.error(f"Invalid ORCID ID format: {orcid_id}")
+            logger.error("ORCID IDs must match the pattern: XXXX-XXXX-XXXX-XXXX")
+            sys.exit(1)
+
         logger.info(f"Using ORCID ID directly: {orcid_id}")
     else:
         uin = args.uin
+
+        # Validate UIN format
+        if not validate_uin(uin):
+            logger.error(f"Invalid UIN format: {uin}")
+            logger.error("UINs must be exactly 9 digits")
+            sys.exit(1)
+
         if not args.mapping_db:
             logger.error("--mapping-db is required when using --uin")
             sys.exit(1)
@@ -158,8 +173,7 @@ def main():
         logger.info(f"No {section} data found; skipping file creation.")
         return
 
-    # Write JSON output
-    config = get_config()
+    # Write JSON output (reuse config from initial load to respect --config)
     output_path.mkdir(parents=True, exist_ok=True)
     output_file = output_path / output_filename
     output_file.write_text(json.dumps(data, indent=config.json_indent, ensure_ascii=False))

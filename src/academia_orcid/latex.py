@@ -1,9 +1,34 @@
 """LaTeX generation for ORCID publication and data sections."""
 
+import re
+
 # NOTE: escape_latex_smart (from normalize.py) is used for free-text fields
 # (titles, biography) that may contain HTML markup or LaTeX math.
 # escape_latex (below) is used for structured fields (names, orgs, venues)
 # that never contain markup.
+
+
+def sanitize_url_for_latex(url: str) -> str:
+    """Sanitize a URL for safe use inside LaTeX \\href{}{}.
+
+    Strips characters that could break out of the \\href command
+    (braces, backslashes) and rejects non-http(s) schemes.
+
+    Args:
+        url: Raw URL string
+
+    Returns:
+        Sanitized URL safe for \\href{}, or empty string if invalid.
+    """
+    if not url:
+        return ""
+    url = url.strip()
+    # Only allow http/https URLs
+    if not re.match(r'^https?://', url, re.IGNORECASE):
+        return ""
+    # Remove characters that can break \href{}: backslashes, braces
+    url = url.replace("\\", "").replace("{", "").replace("}", "")
+    return url
 
 
 def escape_latex(text: str) -> str:
@@ -72,8 +97,11 @@ def _generate_publication_list(lines: list[str], subsection_name: str, publicati
         # Add DOI link if available (on new line, lowercase)
         if doi:
             doi_escaped = escape_latex(doi).lower()
-            doi_url = f"https://doi.org/{doi}".lower()
-            entry += f"\\\\ \\href{{{doi_url}}}{{DOI:{doi_escaped}}}"
+            doi_url = sanitize_url_for_latex(f"https://doi.org/{doi}".lower())
+            if doi_url:
+                entry += f"\\\\ \\href{{{doi_url}}}{{DOI:{doi_escaped}}}"
+            else:
+                entry += f"\\\\ DOI:{doi_escaped}"
 
         lines.append(f"  \\item {entry}")
     lines.append(r"\end{itemize}")
@@ -247,7 +275,7 @@ def generate_data_latex(
         for ext_id in external_identifiers:
             id_type = escape_latex(ext_id.get("type", ""))
             id_value = escape_latex(ext_id.get("value", ""))
-            url = ext_id.get("url", "")
+            url = sanitize_url_for_latex(ext_id.get("url", ""))
 
             if url:
                 lines.append(f"  \\item {id_type}: \\href{{{url}}}{{{id_value}}}")
