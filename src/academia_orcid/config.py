@@ -221,7 +221,8 @@ def get_config(config_file: Path | None = None) -> Config:
     global _default_config
 
     if config_file:
-        return Config(config_file)
+        _default_config = Config(config_file)
+        return _default_config
 
     if _default_config is None:
         # Try to load from default locations

@@ -117,10 +117,14 @@ def generate_latex(orcid_id: str, journal_articles: list, conference_papers: lis
     lines.append(r"\section{ORCID Publications}")
     lines.append("")
 
-    # ORCID profile link
-    orcid_url = f"https://orcid.org/{orcid_id}"
+    # ORCID profile link (sanitize — defense in depth)
+    orcid_url = sanitize_url_for_latex(f"https://orcid.org/{orcid_id}")
+    orcid_id_escaped = escape_latex(orcid_id)
     lines.append(r"\noindent")
-    lines.append(f"ORCID: \\href{{{orcid_url}}}{{{orcid_id}}}")
+    if orcid_url:
+        lines.append(f"ORCID: \\href{{{orcid_url}}}{{{orcid_id_escaped}}}")
+    else:
+        lines.append(f"ORCID: {orcid_id_escaped}")
     lines.append("")
 
     # Summary counts
@@ -169,10 +173,14 @@ def generate_data_latex(
     lines.append(r"\section{ORCID Data}")
     lines.append("")
 
-    # ORCID profile link
-    orcid_url = f"https://orcid.org/{orcid_id}"
+    # ORCID profile link (sanitize — defense in depth)
+    orcid_url = sanitize_url_for_latex(f"https://orcid.org/{orcid_id}")
+    orcid_id_escaped = escape_latex(orcid_id)
     lines.append(r"\noindent")
-    lines.append(f"ORCID: \\href{{{orcid_url}}}{{{orcid_id}}}")
+    if orcid_url:
+        lines.append(f"ORCID: \\href{{{orcid_url}}}{{{orcid_id_escaped}}}")
+    else:
+        lines.append(f"ORCID: {orcid_id_escaped}")
     lines.append("")
 
     from academia_orcid.normalize import escape_latex_smart
