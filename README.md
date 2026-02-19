@@ -2,25 +2,48 @@
 
 Fetches academic publication and employment data from ORCID and generates LaTeX/JSON sections for faculty vita reports. Institution-agnostic — works with any UIN→ORCID mapping database.
 
-## Quick Start
+Can also produce **standalone CVs** (PDF or Word) directly from an ORCID ID.
+
+## Standalone CV Generation
+
+Generate a complete CV from any ORCID ID — no database or composer required.
 
 ```bash
-# Install in development mode
+# PDF (via LaTeX)
+python tools/compose_cv.py --orcid 0000-0003-0831-6109
+
+# Word document
+python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format docx
+
+# Filter publications by year
+python tools/compose_cv.py --orcid 0000-0003-0831-6109 --year 2020-2025
+
+# LaTeX source only (no compilation)
+python tools/compose_cv.py --orcid 0000-0003-0831-6109 --skip-compile
+```
+
+Output goes to `out_cv/{orcid-id}/`. PDF requires `pdflatex`; DOCX requires `pip install python-docx`.
+
+## Section Generation (Composer Interface)
+
+When used as a section provider for the parent composer, this package produces `.tex` and `.json` fragments:
+
+```bash
 pip install -e .
 
-# Generate publications section (using ORCID ID directly)
+# Publications section
 python run_latex.py --orcid 0000-0003-0831-6109 --output-dir ./out
 
-# Generate ORCID data section (employment, education, etc.)
+# ORCID data section (employment, education, etc.)
 python run_latex.py --orcid 0000-0003-0831-6109 --output-dir ./out --section data
 
-# Using UIN (requires SQLite mapping database)
-python run_latex.py --uin 123456789 --output-dir ./out --mapping-db /path/to/shared.db
-
-# JSON output (same CLI contract)
+# JSON output
 python run_json.py --orcid 0000-0003-0831-6109 --output-dir ./out
 
-# With year filter
+# Using UIN (requires mapping database)
+python run_latex.py --uin 123456789 --output-dir ./out --mapping-db /path/to/shared.db
+
+# Year filter
 python run_latex.py --orcid 0000-0003-0831-6109 --output-dir ./out --year 2020-2025
 ```
 
@@ -28,45 +51,42 @@ python run_latex.py --orcid 0000-0003-0831-6109 --output-dir ./out --year 2020-2
 
 ```
 academia-orcid/
-├── src/
-│   └── academia_orcid/           # Installable Python package
-│       ├── __init__.py           # Package constants and version
-│       ├── cli.py                # Main entry point (argparse + orchestration)
-│       ├── extract.py            # Data extraction from ORCID records
-│       ├── latex.py              # LaTeX generation (publications + data sections)
-│       ├── json_export.py        # JSON export (publications + data sections)
-│       ├── normalize.py          # Text normalization (HTML, LaTeX, Unicode)
-│       ├── fetch.py              # ORCID API client, caching, UIN mapping
-│       └── schema.py             # TypedDict definitions for ORCID v3.0 JSON
-├── tests/                        # Test directory
-├── tools/                        # Standalone analysis scripts (not part of pipeline)
-├── ORCID_JSON/                   # Cached ORCID records (gitignored)
-├── outputs/                      # Generated output files (gitignored)
-├── run_latex.py                  # Thin wrapper for composer compatibility (LaTeX)
-├── run_json.py                   # Thin wrapper for composer compatibility (JSON)
-├── pyproject.toml                # Package configuration (src layout)
-└── .gitignore
+├── src/academia_orcid/             # Installable Python package
+│   ├── cli.py                      # Section-provider entry point
+│   ├── fetch.py                    # ORCID API client and caching
+│   ├── extract.py                  # Data extraction from ORCID records
+│   ├── latex.py                    # LaTeX generation
+│   ├── json_export.py              # JSON export
+│   ├── normalize.py                # Text normalization (HTML, LaTeX, Unicode)
+│   └── schema.py                   # ORCID v3.0 TypedDict definitions
+├── tools/                          # Standalone CV tools
+│   ├── compose_cv.py               # CV generator (--format latex | docx)
+│   ├── docx_formatter.py           # ORCID-only Word formatter
+│   └── templates/                  # LaTeX templates for standalone CV
+├── tests/                          # Test suite
+├── run_latex.py                    # Composer entry point (LaTeX)
+├── run_json.py                     # Composer entry point (JSON)
+└── pyproject.toml
 ```
 
-## CLI Options
+## Section-Provider CLI Options
 
 | Option | Required | Default | Description |
 |--------|----------|---------|-------------|
 | `--uin` | Yes* | — | Faculty UIN (*mutually exclusive with `--orcid`) |
 | `--orcid` | Yes* | — | ORCID ID directly |
 | `--output-dir` | Yes | — | Output directory for .tex/.json files |
-| `--data-dir` | No | `.` | Base directory containing ORCID data |
 | `--section` | No | `publications` | Section type: `publications` or `data` |
 | `--year` | No | — | Year filter (ignored for data section) |
-| `--fetch` | No | Yes | Fetch from API if not cached |
-| `--no-fetch` | No | — | Only use cached records |
-| `--force-fetch` | No | — | Always fetch from API |
-| `--mapping-db` | Yes** | — | Path to SQLite database with `orcid_mapping` table (**required when using `--uin`) |
+| `--fetch` / `--no-fetch` / `--force-fetch` | No | `--fetch` | ORCID API fetch control |
+| `--mapping-db` | Yes** | — | SQLite database with `orcid_mapping` table (**required with `--uin`) |
 
 ## Dependencies
 
 ```
 requests        # ORCID API calls
+python-docx     # Word output (optional, only for tools/compose_cv.py --format docx)
+pdflatex        # PDF compilation (optional, system requirement)
 ```
 
 ## Credits
