@@ -15,8 +15,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+config = [
+    "pyyaml>=6.0",
+]
 dev = [
     "pytest",
+    "pyyaml>=6.0",
     "ruff",
 ]
 

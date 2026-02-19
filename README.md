@@ -10,22 +10,22 @@ Generate a complete CV from any ORCID ID — no database or composer required.
 
 ```bash
 # PDF (via LaTeX)
-python tools/compose_cv.py --orcid 0000-0003-0831-6109
+python tools/compose_cv.py --orcid 0000-0002-2983-9884
 
 # Word document
-python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format docx
+python tools/compose_cv.py --orcid 0000-0002-2983-9884 --format docx
 
 # BibTeX bibliography
-python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format bibtex
+python tools/compose_cv.py --orcid 0000-0002-2983-9884 --format bibtex
 
 # BibTeX with DOI enrichment (fills volume, pages, etc.)
-python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format bibtex --enrich
+python tools/compose_cv.py --orcid 0000-0002-2983-9884 --format bibtex --enrich
 
 # Filter publications by year
-python tools/compose_cv.py --orcid 0000-0003-0831-6109 --year 2020-2025
+python tools/compose_cv.py --orcid 0000-0002-2983-9884 --year 2020-2025
 
 # LaTeX source only (no compilation)
-python tools/compose_cv.py --orcid 0000-0003-0831-6109 --skip-compile
+python tools/compose_cv.py --orcid 0000-0002-2983-9884 --skip-compile
 ```
 
 Output goes to `out_cv/{orcid-id}/`. PDF requires `pdflatex`; DOCX requires `pip install python-docx`.
@@ -38,19 +38,19 @@ When used as a section provider for the parent composer, this package produces `
 pip install -e .
 
 # Publications section
-python run_latex.py --orcid 0000-0003-0831-6109 --output-dir ./out
+python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out
 
 # ORCID data section (employment, education, etc.)
-python run_latex.py --orcid 0000-0003-0831-6109 --output-dir ./out --section data
+python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out --section data
 
 # JSON output
-python run_json.py --orcid 0000-0003-0831-6109 --output-dir ./out
+python run_json.py --orcid 0000-0002-2983-9884 --output-dir ./out
 
 # Using UIN (requires mapping database)
 python run_latex.py --uin 123456789 --output-dir ./out --mapping-db /path/to/shared.db
 
 # Year filter
-python run_latex.py --orcid 0000-0003-0831-6109 --output-dir ./out --year 2020-2025
+python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out --year 2020-2025
 ```
 
 ## Project Structure

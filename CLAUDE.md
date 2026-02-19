@@ -42,6 +42,8 @@ academia-orcid/
 │       ├── enrich.py             # DOI content negotiation enrichment (opt-in)
 │       ├── normalize.py          # Text normalization (HTML, LaTeX, Unicode)
 │       ├── fetch.py              # ORCID API client, caching, UIN mapping
+│       ├── config.py             # YAML configuration management (optional pyyaml)
+│       ├── logging_config.py     # Logging setup and module logger factory
 │       └── schema.py             # TypedDict definitions for ORCID JSON
 ├── tests/                        # Test directory
 ├── tools/                        # Standalone CV tools and analysis scripts
@@ -87,6 +89,8 @@ Schema documentation: [src/academia_orcid/schema.py](src/academia_orcid/schema.p
 | `academia_orcid.bibtex_export` | BibTeX export (embedded ORCID citations preferred, generated fallback) |
 | `academia_orcid.enrich` | DOI content negotiation enrichment (opt-in, fill-only semantics) |
 | `academia_orcid.normalize` | Text normalization (HTML→LaTeX, plaintext cleaning) |
+| `academia_orcid.config` | YAML configuration management (`Config` class, `get_config()`, env overrides) |
+| `academia_orcid.logging_config` | Logging setup (`setup_logging()`, `get_logger()`) |
 | `academia_orcid.schema` | TypedDict definitions for ORCID v3.0 JSON structure |
 
 ## Root Scripts
@@ -116,7 +120,7 @@ python run_json.py --uin <uin> --output-dir ./out --mapping-db /path/to/shared.d
 python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/shared.db --year 2024-2025
 
 # Using ORCID ID directly (bypasses UIN→ORCID mapping)
-python run_latex.py --orcid 0000-0003-0831-6109 --output-dir ./out
+python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out
 
 # Force-refresh cached ORCID record from API
 python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/shared.db --force-fetch
@@ -186,7 +190,7 @@ The package requires a SQLite database with an `orcid_mapping` table:
 | Column | Description |
 |--------|-------------|
 | `UIN` | Faculty identifier |
-| `ORCID` | ORCID ID (e.g., `0000-0003-0831-6109`) |
+| `ORCID` | ORCID ID (e.g., `0000-0002-2983-9884`) |
 
 The mapping database path is passed via `--mapping-db`. Alternatively, use `--orcid` to bypass the mapping entirely.
 
@@ -194,9 +198,14 @@ The mapping database path is passed via `--mapping-db`. Alternatively, use `--or
 
 ```
 requests        # ORCID API calls
+pyyaml          # Optional: YAML config file support (falls back to defaults if absent)
 ```
 
 Install the package in development mode: `pip install -e .`
+
+### Configuration
+
+Optional YAML config file (`.academia-orcid.yaml`) searched in: `./`, `~/`, `/etc/academia-orcid/`. Supports API tuning (base URL, timeouts, rate limits), cache settings, and output options. Environment variable overrides: `ORCID_API_BASE_URL`, `ORCID_CACHE_TTL`, `ORCID_API_TIMEOUT`. See [.academia-orcid.yaml.example](.academia-orcid.yaml.example) for format.
 
 ## Standalone CV Tool
 
@@ -212,18 +221,18 @@ The standalone tool accepts only `--orcid` as input — university-specific UIN 
 
 ```bash
 # LaTeX/PDF (default)
-python tools/compose_cv.py --orcid 0000-0003-0831-6109
-python tools/compose_cv.py --orcid 0000-0003-0831-6109 --year 2020-2025
-python tools/compose_cv.py --orcid 0000-0003-0831-6109 --skip-compile
+python tools/compose_cv.py --orcid 0000-0002-2983-9884
+python tools/compose_cv.py --orcid 0000-0002-2983-9884 --year 2020-2025
+python tools/compose_cv.py --orcid 0000-0002-2983-9884 --skip-compile
 
 # DOCX
-python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format docx
+python tools/compose_cv.py --orcid 0000-0002-2983-9884 --format docx
 
 # BibTeX
-python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format bibtex
+python tools/compose_cv.py --orcid 0000-0002-2983-9884 --format bibtex
 
 # DOI enrichment (fills volume, pages, etc. from DOI metadata)
-python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format bibtex --enrich
+python tools/compose_cv.py --orcid 0000-0002-2983-9884 --format bibtex --enrich
 
 # Other options: --output-dir, --data-dir, --fetch/--no-fetch/--force-fetch, --dry-run
 ```
