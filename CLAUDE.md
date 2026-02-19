@@ -26,9 +26,17 @@ academia-orcid/
 │       ├── fetch.py              # ORCID API client, caching, UIN mapping
 │       └── schema.py             # TypedDict definitions for ORCID JSON
 ├── tests/                        # Test directory
+├── tools/                        # Standalone CV tools and analysis scripts
+│   ├── compose_cv.py             # Standalone ORCID CV generator (LaTeX/PDF + DOCX)
+│   ├── docx_formatter.py         # ORCID-only DOCX formatter
+│   └── templates/                # LaTeX templates for standalone CV
+│       ├── preamble.tex          # Minimal preamble (no tikz/pgfplots)
+│       ├── header.tex.template   # Faculty header template
+│       └── main.tex.template     # Main document (ORCID sections only)
+├── tools_local/                  # Local analysis scripts (gitignored)
 ├── ORCID_JSON/                   # Cached ORCID records (gitignored)
 ├── outputs/                      # Generated output files (gitignored)
-├── tools/                        # Standalone analysis scripts (not part of pipeline)
+├── out_cv/                       # Standalone CV output (gitignored)
 ├── run_latex.py                  # Thin wrapper for composer compatibility (LaTeX)
 ├── run_json.py                   # Thin wrapper for composer compatibility (JSON)
 ├── pyproject.toml                # Package configuration (src layout)
@@ -167,6 +175,59 @@ requests        # ORCID API calls
 ```
 
 Install the package in development mode: `pip install -e .`
+
+## Standalone CV Tool
+
+This repo can independently produce complete CVs from ORCID data alone, without requiring the parent `tamu-coe-faculty-profiles` composer or its privileged data sources.
+
+### Rationale
+
+ORCID data is public, unlike the other data sources aggregated by the parent composer (SET evaluations, funding, service records, awards). This standalone tool allows anyone with an ORCID ID to generate a formatted CV without access to the full composer infrastructure.
+
+### CLI
+
+The standalone tool accepts only `--orcid` as input — university-specific UIN lookups are handled by the parent composer.
+
+```bash
+# LaTeX/PDF (default)
+python tools/compose_cv.py --orcid 0000-0003-0831-6109
+python tools/compose_cv.py --orcid 0000-0003-0831-6109 --year 2020-2025
+python tools/compose_cv.py --orcid 0000-0003-0831-6109 --skip-compile
+
+# DOCX
+python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format docx
+
+# Other options: --output-dir, --data-dir, --fetch/--no-fetch/--force-fetch, --dry-run
+```
+
+Output goes to `out_cv/{orcid-id}/` by default:
+- LaTeX: `{orcid-id}-cv.pdf`, `{orcid-id}-source.zip`, and `.tex` source files
+- DOCX: `{orcid-id}-cv.docx`
+
+### File Provenance
+
+The standalone CV tools are **derived from** the parent composer's code in `tamu-coe-faculty-profiles/`:
+
+| Local file | Derived from (parent) |
+|------------|----------------------|
+| `tools/compose_cv.py` | `compose_latex.py` (compilation, archiving), `compose_docx.py` (DOCX profile building) |
+| `tools/docx_formatter.py` | `formatters/docx_formatter.py` (ORCID renderers only: `_render_orcid_data`, `_render_publications`, helpers) |
+| `tools/templates/preamble.tex` | `templates/preamble.tex` (stripped of tikz/pgfplots, which are only needed for SET charts) |
+| `tools/templates/header.tex.template` | `templates/header.tex.template` (verbatim) |
+| `tools/templates/main.tex.template` | `templates/main.tex.template` (simplified: ORCID sections only, no awards/service/funding/SET/appendix) |
+
+### Upstream Sync Policy
+
+When the parent composer's CV generation methods are updated (e.g., formatting changes in `formatters/docx_formatter.py`, template updates in `templates/`, or compilation logic changes in `compose_latex.py`), the corresponding local tools should be updated to parallel those changes **upon request** — not automatically. Claude should diff the parent's files against the local adaptations and propagate relevant changes when asked.
+
+### Relationship to Section-Provider Role
+
+The standalone CV tools (`tools/`) are **independent** of the section-provider interface. The composer entry points (`run_latex.py`, `run_json.py`) remain unchanged and continue to produce `.tex`/`.json` fragments as before. The tools reuse the same package modules (`academia_orcid.fetch`, `academia_orcid.extract`, etc.) but add the "last mile" — template generation, compilation, and document assembly — that was previously only available through the parent composer.
+
+### Dependencies
+
+- `python-docx` is required for `--format docx` but is **not** a package dependency. If unavailable, `--format latex` still works. Install with: `pip install python-docx`
+- `pdflatex` (TeX Live or MacTeX) is required for PDF compilation. Use `--skip-compile` to generate LaTeX source without compiling.
 
 ## Notes
 

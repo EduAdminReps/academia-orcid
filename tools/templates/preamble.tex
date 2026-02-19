@@ -1,0 +1,85 @@
+% preamble.tex - Shared packages and formatting for ORCID CV
+%
+% Derived from tamu-coe-faculty-profiles/templates/preamble.tex
+% Simplified for ORCID-only output (no tikz/pgfplots needed)
+
+% Page layout
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+
+% Fonts and encoding
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+
+% Tables
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+
+% Graphics
+\usepackage{graphicx}
+
+% Colors
+\usepackage{xcolor}
+\definecolor{tamumaroon}{RGB}{80,0,0}
+\definecolor{darkgray}{RGB}{64,64,64}
+\definecolor{lightgray}{RGB}{192,192,192}
+
+% Hyperlinks
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=tamumaroon,
+    urlcolor=tamumaroon,
+    citecolor=tamumaroon
+}
+
+% Compact lists
+\usepackage{enumitem}
+\setlist[itemize]{
+    topsep=4pt,
+    partopsep=0pt,
+    parsep=0pt,
+    itemsep=2pt,
+    leftmargin=1.5em,
+    labelsep=0.5em
+}
+\setlist[enumerate]{
+    topsep=4pt,
+    partopsep=0pt,
+    parsep=0pt,
+    itemsep=2pt,
+    leftmargin=1.5em,
+    labelsep=0.5em
+}
+
+% Section formatting
+\usepackage{titlesec}
+\titleformat{\section}
+    {\normalfont\Large\bfseries\color{tamumaroon}}
+    {\thesection.}{1em}{}
+\titleformat{\subsection}
+    {\normalfont\large\bfseries}
+    {\thesubsection.}{1em}{}
+
+% Header/Footer
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\leftmark}
+\fancyhead[R]{\small\facultyname}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Custom commands
+\newcommand{\facultyname}{}      % Set by header.tex
+\newcommand{\facultydept}{}      % Set by header.tex
+\newcommand{\facultytitle}{}     % Set by header.tex
+\newcommand{\reportyear}{}       % Set by main.tex
+
+% Empty section placeholder
+\newcommand{\nosectiondata}[1]{%
+    \textit{No data available for this section.}
+}
