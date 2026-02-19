@@ -5,23 +5,32 @@ import json
 import pytest
 
 
-def _make_work(pub_type, title, year, venue="", doi="", authors=None):
+def _make_work(pub_type, title, year, venue="", doi="", authors=None,
+               month="", url="", citation=None, extra_ids=None):
     """Helper to build a minimal ORCID work-group entry."""
     contributors = []
     for name in (authors or []):
         contributors.append({"credit-name": {"value": name}})
 
+    external_ids = []
+    if doi:
+        external_ids.append({"external-id-type": "doi", "external-id-value": doi})
+    for eid_type, eid_value in (extra_ids or {}).items():
+        external_ids.append({"external-id-type": eid_type, "external-id-value": eid_value})
+
+    pub_date = {"year": {"value": year}}
+    if month:
+        pub_date["month"] = {"value": month}
+
     work_summary = {
         "type": pub_type,
         "title": {"title": {"value": title}},
-        "publication-date": {"year": {"value": year}},
+        "publication-date": pub_date,
         "journal-title": {"value": venue} if venue else None,
         "contributors": {"contributor": contributors} if contributors else None,
-        "external-ids": {
-            "external-id": [
-                {"external-id-type": "doi", "external-id-value": doi}
-            ] if doi else []
-        },
+        "external-ids": {"external-id": external_ids},
+        "url": {"value": url} if url else None,
+        "citation": citation,
     }
     return {"work-summary": [work_summary]}
 

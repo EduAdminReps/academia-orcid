@@ -2,7 +2,7 @@
 
 Fetches academic publication and employment data from ORCID and generates LaTeX/JSON sections for faculty vita reports. Institution-agnostic — works with any UIN→ORCID mapping database.
 
-Can also produce **standalone CVs** (PDF or Word) directly from an ORCID ID.
+Can also produce **standalone CVs** (PDF, Word, or BibTeX) directly from an ORCID ID.
 
 ## Standalone CV Generation
 
@@ -14,6 +14,12 @@ python tools/compose_cv.py --orcid 0000-0003-0831-6109
 
 # Word document
 python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format docx
+
+# BibTeX bibliography
+python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format bibtex
+
+# BibTeX with DOI enrichment (fills volume, pages, etc.)
+python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format bibtex --enrich
 
 # Filter publications by year
 python tools/compose_cv.py --orcid 0000-0003-0831-6109 --year 2020-2025
@@ -57,15 +63,18 @@ academia-orcid/
 │   ├── extract.py                  # Data extraction from ORCID records
 │   ├── latex.py                    # LaTeX generation
 │   ├── json_export.py              # JSON export
+│   ├── bibtex_export.py            # BibTeX export
+│   ├── enrich.py                   # DOI content negotiation enrichment
 │   ├── normalize.py                # Text normalization (HTML, LaTeX, Unicode)
 │   └── schema.py                   # ORCID v3.0 TypedDict definitions
 ├── tools/                          # Standalone CV tools
-│   ├── compose_cv.py               # CV generator (--format latex | docx)
+│   ├── compose_cv.py               # CV generator (--format latex | docx | bibtex)
 │   ├── docx_formatter.py           # ORCID-only Word formatter
 │   └── templates/                  # LaTeX templates for standalone CV
 ├── tests/                          # Test suite
 ├── run_latex.py                    # Composer entry point (LaTeX)
 ├── run_json.py                     # Composer entry point (JSON)
+├── run_bibtex.py                   # Composer entry point (BibTeX)
 └── pyproject.toml
 ```
 

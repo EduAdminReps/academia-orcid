@@ -328,3 +328,60 @@ class TestDocxPipeline:
         paths = formatter.format(profile, output_dir)
         assert len(paths) == 1
         assert paths[0].exists()
+
+
+# ---------------------------------------------------------------------------
+# Tests: BibTeX pipeline
+# ---------------------------------------------------------------------------
+
+class TestBibtexPipeline:
+    """Test BibTeX CV generation."""
+
+    def test_generates_bib_file(self, sample_record, tmp_path):
+        """Verify that the BibTeX pipeline creates a valid .bib file."""
+        from academia_orcid.extract import extract_publications
+        from academia_orcid.bibtex_export import export_bibtex
+
+        output_dir = tmp_path / "bibtex_output"
+        output_dir.mkdir()
+        orcid_id = "0000-0001-2345-6789"
+
+        journal, conf, other = extract_publications(sample_record)
+        bibtex_content = export_bibtex(orcid_id, journal, conf, other)
+
+        assert bibtex_content  # should have content
+        bib_path = output_dir / f"{orcid_id}.bib"
+        bib_path.write_text(bibtex_content, encoding="utf-8")
+
+        assert bib_path.exists()
+        content = bib_path.read_text()
+        assert f"% BibTeX export from ORCID record: {orcid_id}" in content
+        assert "@article{" in content  # journal article
+        assert "@inproceedings{" in content  # conference paper
+
+    def test_empty_record(self, tmp_path):
+        """BibTeX export with no publications returns empty string."""
+        from academia_orcid.bibtex_export import export_bibtex
+
+        result = export_bibtex("0000-0001-0000-0000", [], [], [])
+        assert result == ""
+
+    def test_year_filter_applied(self, sample_record):
+        """Year filter works with BibTeX export pipeline."""
+        from academia_orcid.extract import (
+            extract_publications,
+            filter_publications_by_year,
+        )
+        from academia_orcid.bibtex_export import export_bibtex
+
+        journal, conf, other = extract_publications(sample_record)
+
+        # Filter to 2024 only (should keep journal article, exclude 2023 and 2022)
+        journal = filter_publications_by_year(journal, (2024, 2024))
+        conf = filter_publications_by_year(conf, (2024, 2024))
+        other = filter_publications_by_year(other, (2024, 2024))
+
+        result = export_bibtex("0000-0001-2345-6789", journal, conf, other)
+        assert "% Entries: 1 total" in result
+        assert "@article{" in result
+        assert "@inproceedings{" not in result

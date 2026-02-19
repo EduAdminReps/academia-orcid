@@ -4,6 +4,22 @@
 
 This package fetches academic publication and employment data from ORCID (Open Researcher and Contributor ID) and generates LaTeX/JSON sections for faculty vita reports. It is institution-agnostic — any university can use it by providing a UIN→ORCID mapping database.
 
+## Data Philosophy
+
+**ORCID as system of record.** Faculty are asked to maintain their ORCID profiles as a proxy for submitting annual CVs. All generated outputs (PDF, DOCX, BibTeX) are faithful renderings of that record. If a report entry is questioned, the answer is always "this is what's in the faculty member's ORCID profile." This creates a clean accountability boundary — the faculty member owns the data, the tool renders it.
+
+**Hierarchical enrichment.** ORCID data is the baseline for all outputs. External metadata sources — DOI content negotiation (`https://doi.org/{doi}` with `Accept: application/x-bibtex`), Crossref API, DataCite — may fill gaps (volume, pages, number) but never override ORCID-provided fields (title, authors, type, venue). Enrichment is always opt-in (e.g., `--enrich` flag), not automatic. The default output reflects ORCID data only.
+
+**Known metadata quality limitations.** These are inherent source-data limitations, not bugs:
+- *Names*: Both ORCID and Crossref reflect what publishers submitted. Older records and certain publishers (e.g., IEEE) store initials only, not full given names. No automated reconciliation is feasible.
+- *Entry types*: Publishers frequently register conference papers as `journal-article` (because proceedings volumes get ISSNs). ORCID's `type` field has the same source-quality problem.
+- *Older DOIs*: Pre-2005 Crossref records are often skeletal. The structured metadata schema evolved over time; publishers are not obligated to back-fill.
+- *Missing DOIs*: Conference papers, book chapters, technical reports, and non-English publications often lack DOIs entirely. For these, ORCID data is the only source.
+
+The tool renders what the sources provide. If a faculty member wants richer output, the primary answer is "add more detail to your ORCID record." The secondary answer is "use enrichment and review the result."
+
+**Accountability boundary.** The standalone CV tool accepts `--orcid` (not `--uin`) because the ORCID ID is the faculty member's identifier in this workflow. University-specific UIN→ORCID mapping is an institutional concern handled by the parent composer.
+
 ## Vita Sections Covered
 
 | Section | Name | Output File |
@@ -22,12 +38,14 @@ academia-orcid/
 │       ├── extract.py            # Data extraction from ORCID records
 │       ├── latex.py              # LaTeX generation (publications + data sections)
 │       ├── json_export.py        # JSON export (publications + data sections)
+│       ├── bibtex_export.py       # BibTeX export from ORCID publication data
+│       ├── enrich.py             # DOI content negotiation enrichment (opt-in)
 │       ├── normalize.py          # Text normalization (HTML, LaTeX, Unicode)
 │       ├── fetch.py              # ORCID API client, caching, UIN mapping
 │       └── schema.py             # TypedDict definitions for ORCID JSON
 ├── tests/                        # Test directory
 ├── tools/                        # Standalone CV tools and analysis scripts
-│   ├── compose_cv.py             # Standalone ORCID CV generator (LaTeX/PDF + DOCX)
+│   ├── compose_cv.py             # Standalone ORCID CV generator (LaTeX/PDF, DOCX, BibTeX)
 │   ├── docx_formatter.py         # ORCID-only DOCX formatter
 │   └── templates/                # LaTeX templates for standalone CV
 │       ├── preamble.tex          # Minimal preamble (no tikz/pgfplots)
@@ -39,6 +57,7 @@ academia-orcid/
 ├── out_cv/                       # Standalone CV output (gitignored)
 ├── run_latex.py                  # Thin wrapper for composer compatibility (LaTeX)
 ├── run_json.py                   # Thin wrapper for composer compatibility (JSON)
+├── run_bibtex.py                 # Thin wrapper for composer compatibility (BibTeX)
 ├── pyproject.toml                # Package configuration (src layout)
 └── .gitignore
 ```
@@ -65,6 +84,8 @@ Schema documentation: [src/academia_orcid/schema.py](src/academia_orcid/schema.p
 | `academia_orcid.extract` | Publication/data extraction, year filtering |
 | `academia_orcid.latex` | LaTeX generation (`escape_latex`, `generate_latex`, `generate_data_latex`) |
 | `academia_orcid.json_export` | JSON export (`export_publications`, `export_data`) |
+| `academia_orcid.bibtex_export` | BibTeX export (embedded ORCID citations preferred, generated fallback) |
+| `academia_orcid.enrich` | DOI content negotiation enrichment (opt-in, fill-only semantics) |
 | `academia_orcid.normalize` | Text normalization (HTML→LaTeX, plaintext cleaning) |
 | `academia_orcid.schema` | TypedDict definitions for ORCID v3.0 JSON structure |
 
@@ -74,6 +95,7 @@ Schema documentation: [src/academia_orcid/schema.py](src/academia_orcid/schema.p
 |--------|---------|
 | `run_latex.py` | **Composer entry point** — thin wrapper calling `academia_orcid.cli.main()` |
 | `run_json.py` | **Composer entry point** — JSON export for YAML/Word pipelines |
+| `run_bibtex.py` | **Composer entry point** — BibTeX export for publications |
 
 ## CLI Interface
 
@@ -197,12 +219,19 @@ python tools/compose_cv.py --orcid 0000-0003-0831-6109 --skip-compile
 # DOCX
 python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format docx
 
+# BibTeX
+python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format bibtex
+
+# DOI enrichment (fills volume, pages, etc. from DOI metadata)
+python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format bibtex --enrich
+
 # Other options: --output-dir, --data-dir, --fetch/--no-fetch/--force-fetch, --dry-run
 ```
 
 Output goes to `out_cv/{orcid-id}/` by default:
 - LaTeX: `{orcid-id}-cv.pdf`, `{orcid-id}-source.zip`, and `.tex` source files
 - DOCX: `{orcid-id}-cv.docx`
+- BibTeX: `{orcid-id}.bib`
 
 ### File Provenance
 

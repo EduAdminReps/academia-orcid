@@ -289,6 +289,14 @@ def generate_latex_cv(args):
         conference_papers = filter_publications_by_year(conference_papers, year_filter)
         other_publications = filter_publications_by_year(other_publications, year_filter)
 
+    # Optional DOI enrichment
+    if args.enrich:
+        from academia_orcid.enrich import enrich_publications
+        logger.info("Enriching publications via DOI content negotiation...")
+        journal_articles = enrich_publications(journal_articles)
+        conference_papers = enrich_publications(conference_papers)
+        other_publications = enrich_publications(other_publications)
+
     pubs_latex = generate_latex(orcid_id, journal_articles, conference_papers, other_publications)
     if pubs_latex:
         (output_dir / "orcid-publications.tex").write_text(pubs_latex)
@@ -377,6 +385,14 @@ def generate_docx_cv(args):
         conference_papers = filter_publications_by_year(conference_papers, year_filter)
         other_publications = filter_publications_by_year(other_publications, year_filter)
 
+    # Optional DOI enrichment
+    if args.enrich:
+        from academia_orcid.enrich import enrich_publications
+        logger.info("Enriching publications via DOI content negotiation...")
+        journal_articles = enrich_publications(journal_articles)
+        conference_papers = enrich_publications(conference_papers)
+        other_publications = enrich_publications(other_publications)
+
     # Build JSON data
     data_json = export_data(
         orcid_id, biography, external_identifiers, fundings,
@@ -415,13 +431,73 @@ def generate_docx_cv(args):
 
 
 # ---------------------------------------------------------------------------
+# BibTeX pipeline
+# ---------------------------------------------------------------------------
+
+def generate_bibtex_cv(args):
+    """Generate a BibTeX file from ORCID publications."""
+    from academia_orcid.bibtex_export import export_bibtex
+
+    orcid_id, record = resolve_and_fetch(args)
+    if not record:
+        sys.exit(1)
+
+    person = extract_person_info(record)
+    logger.info(f"Faculty: {person['name']}")
+
+    # Year filter
+    year_filter = parse_year_filter(args.year)
+    if year_filter:
+        logger.info(f"Year filter: {year_filter[0]}-{year_filter[1]}")
+
+    # Output directory
+    output_dir = Path(args.output_dir) if args.output_dir else DEFAULT_OUTPUT_BASE / orcid_id
+
+    if args.dry_run:
+        logger.info(f"[dry-run] Would create: {output_dir}")
+        logger.info(f"[dry-run] Would generate BibTeX for {person['name']}")
+        return
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Extract publications
+    journal_articles, conference_papers, other_publications = extract_publications(record)
+
+    if year_filter:
+        journal_articles = filter_publications_by_year(journal_articles, year_filter)
+        conference_papers = filter_publications_by_year(conference_papers, year_filter)
+        other_publications = filter_publications_by_year(other_publications, year_filter)
+
+    # Optional DOI enrichment
+    if args.enrich:
+        from academia_orcid.enrich import enrich_publications
+        logger.info("Enriching publications via DOI content negotiation...")
+        journal_articles = enrich_publications(journal_articles)
+        conference_papers = enrich_publications(conference_papers)
+        other_publications = enrich_publications(other_publications)
+
+    # Generate BibTeX
+    bibtex_content = export_bibtex(
+        orcid_id, journal_articles, conference_papers, other_publications
+    )
+
+    if not bibtex_content:
+        logger.info("No publications found; skipping .bib file creation.")
+        return
+
+    bib_path = output_dir / f"{orcid_id}.bib"
+    bib_path.write_text(bibtex_content, encoding="utf-8")
+    logger.info(f"BibTeX: {bib_path}")
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Generate a standalone ORCID-based CV (LaTeX/PDF or DOCX)."
+        description="Generate a standalone ORCID-based CV (LaTeX/PDF, DOCX, or BibTeX)."
     )
 
     # Identification
@@ -430,7 +506,7 @@ def parse_args():
 
     # Format
     parser.add_argument(
-        "--format", default="latex", choices=["latex", "docx"],
+        "--format", default="latex", choices=["latex", "docx", "bibtex"],
         help="Output format (default: latex)"
     )
 
@@ -449,6 +525,10 @@ def parse_args():
                         help="Only use cached records")
     parser.add_argument("--force-fetch", action="store_true",
                         help="Always fetch from API (refresh cache)")
+
+    # Enrichment
+    parser.add_argument("--enrich", action="store_true",
+                        help="Enrich publications via DOI content negotiation (fills gaps)")
 
     # LaTeX-specific
     parser.add_argument("--skip-compile", action="store_true",
@@ -478,6 +558,8 @@ def main():
         generate_latex_cv(args)
     elif args.format == "docx":
         generate_docx_cv(args)
+    elif args.format == "bibtex":
+        generate_bibtex_cv(args)
 
 
 if __name__ == "__main__":

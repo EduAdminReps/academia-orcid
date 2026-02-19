@@ -168,16 +168,38 @@ def extract_publications(record: dict) -> tuple[list, list, list]:
                     if raw_conf:
                         venue = html.unescape(raw_conf)
 
-            # Get DOI if available
+            # Get month if available
+            month = ""
+            pub_date = work_details.get("publication-date", {})
+            if pub_date:
+                month_obj = pub_date.get("month")
+                if month_obj and isinstance(month_obj, dict):
+                    month = month_obj.get("value", "")
+
+            # Get URL if available
+            url = ""
+            url_obj = work_details.get("url")
+            if url_obj and isinstance(url_obj, dict):
+                url = url_obj.get("value", "")
+
+            # Collect all external IDs
             doi = ""
+            all_external_ids = {}
             external_ids = work_details.get("external-ids", {})
             if external_ids:
                 external_id_list = external_ids.get("external-id", [])
                 if external_id_list:
                     for eid in external_id_list:
-                        if eid and eid.get("external-id-type", "") == "doi":
-                            doi = eid.get("external-id-value", "")
-                            break
+                        if eid:
+                            eid_type = eid.get("external-id-type", "")
+                            eid_value = eid.get("external-id-value", "")
+                            if eid_type and eid_value:
+                                all_external_ids[eid_type] = eid_value
+                                if eid_type == "doi" and not doi:
+                                    doi = eid_value
+
+            # Get citation data if present (may contain BibTeX)
+            citation_data = work_details.get("citation")
 
             # Format authors (IEEE style: Last, F.M.)
             config = get_config()
@@ -197,10 +219,16 @@ def extract_publications(record: dict) -> tuple[list, list, list]:
 
             pub_entry = {
                 "authors": ", ".join(formatted_authors),
+                "raw_authors": list(author_names),
                 "title": title,
                 "venue": venue,
                 "year": year,
+                "month": month,
                 "doi": doi,
+                "url": url,
+                "pub_type": pub_type,
+                "external_ids": all_external_ids,
+                "citation": citation_data,
             }
 
             # Categorize
