@@ -7,6 +7,11 @@ import re
 # escape_latex (below) is used for structured fields (names, orgs, venues)
 # that never contain markup.
 
+# Characters outside Latin-1 (U+00FF) that pdflatex cannot render without
+# specialized packages (CJK, Arabic, etc.). Accented Latin characters (é, ñ, ü)
+# are kept — pdflatex handles them with \usepackage[utf8]{inputenc} + lmodern.
+_NON_LATIN1_RE = re.compile(r'[^\x00-\xff]')
+
 
 def sanitize_url_for_latex(url: str) -> str:
     """Sanitize a URL for safe use inside LaTeX \\href{}{}.
@@ -50,6 +55,8 @@ def escape_latex(text: str) -> str:
     ]
     for old, new in replacements:
         text = text.replace(old, new)
+    # Strip characters outside Latin-1 that pdflatex cannot render
+    text = _NON_LATIN1_RE.sub('', text)
     return text
 
 

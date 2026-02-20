@@ -13,7 +13,7 @@ Functions are organized by output format:
 
 import re
 
-from academia_orcid.latex import escape_latex
+from academia_orcid.latex import _NON_LATIN1_RE, escape_latex
 
 
 # ── Shared patterns ──────────────────────────────────────────────────────
@@ -155,6 +155,11 @@ def escape_latex_smart(text: str) -> str:
 
     # Step 6: Restore backslash-space
     result = result.replace(SENTINEL, "\\ ")
+
+    # Step 7: Strip non-Latin-1 characters (CJK, Arabic, etc.) that pdflatex
+    # cannot render. This catches characters in math regions or anywhere
+    # else that escape_latex() may not have processed.
+    result = _NON_LATIN1_RE.sub('', result)
     return result
 
 

@@ -272,5 +272,6 @@ The standalone CV tools (`tools/`) are **independent** of the section-provider i
 - ORCID API has rate limits — scripts implement delays and retries
 - Unicode handling via `html.unescape()` for international characters
 - LaTeX special characters escaped automatically
+- **Non-Latin character stripping (LaTeX output only):** `escape_latex()` and `escape_latex_smart()` strip characters outside the Latin-1 range (U+0000–U+00FF). Accented Latin characters (é, ñ, ü) are kept — pdflatex handles them with `inputenc` + `lmodern`. CJK, Arabic, and other non-Latin scripts are silently removed because pdflatex cannot render them without specialized packages. This only affects LaTeX/PDF output; JSON and DOCX preserve all Unicode.
 - DOI links preserved and formatted as hyperlinks
 - Year filtering supported via `--year` flag (range, single year, or `all`)
