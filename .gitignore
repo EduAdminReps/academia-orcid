@@ -29,7 +29,8 @@ htmlcov/
 *~
 
 # Claude Code
-.claude/
+.claude/*
+!.claude/settings.json
 
 # Codex
 .codex/

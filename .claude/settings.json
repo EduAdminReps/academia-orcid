@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(./**)",
+      "Edit(./**)",
+      "Write(./**)",
+
+      "Bash(pip list:*)",
+      "Bash(pip show:*)",
+      "Bash(pip install:*)",
+
+      "Bash(ruff:*)",
+
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "Bash(git stash list:*)",
+      "Bash(git stash show:*)"
+    ],
+    "deny": [
+      "Read(./.venv/**)",
+      "Read(./__pycache__/**)",
+      "Read(./**/*.pyc)",
+      "Read(./.DS_Store)",
+      "Read(./outputs/**)",
+
+      "Write(./.git/**)",
+      "Edit(./.git/**)",
+
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/*credentials*)",
+      "Read(./**/*secret*)",
+
+      "Bash(git push:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git rebase:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean:*)",
+      "Bash(git checkout .:*)",
+      "Bash(git restore .:*)"
+    ]
+  }
+}
