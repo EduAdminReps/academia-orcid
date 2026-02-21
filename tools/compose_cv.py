@@ -16,6 +16,7 @@ Usage:
 
 import argparse
 import logging
+import re
 import shutil
 import subprocess
 import sys
@@ -108,6 +109,10 @@ def generate_header(faculty_info: dict, template_path: Path, output_path: Path):
     """Generate header.tex from template with faculty info."""
     content = template_path.read_text()
     content = content.format(**faculty_info)
+    # Remove lines where an optional field was empty, e.g. {\Large }\\[1.5em].
+    # LaTeX raises "There's no line here to end" when \\ follows an empty group
+    # in a center environment. This happens when college/department are absent.
+    content = re.sub(r'[ \t]*\{\\[A-Za-z]+[ \t]*\}\\\\[^\n]*\n', '', content)
     output_path.write_text(content)
 
 
