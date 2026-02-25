@@ -23,6 +23,7 @@ from academia_orcid.extract import (
     parse_year_filter,
 )
 from academia_orcid.fetch import (
+    OrcidFetchError,
     get_or_fetch_orcid_record,
     get_orcid_for_uin,
     validate_orcid_id,
@@ -195,7 +196,13 @@ def main():
         logger.info(f"Found ORCID {orcid_id} for UIN {uin}")
 
     # Load ORCID record from cache, or fetch from API if not cached
-    record = get_or_fetch_orcid_record(data_path, orcid_id, dept, fetch=fetch_enabled, force=force_fetch)
+    try:
+        record = get_or_fetch_orcid_record(data_path, orcid_id, dept, fetch=fetch_enabled, force=force_fetch)
+    except OrcidFetchError as e:
+        reason = f"ORCID API fetch failed for {orcid_id}: {e}"
+        logger.error(reason)
+        _write_unavailable(output_path, output_filename, section, reason, logger)
+        sys.exit(2)
     if not record:
         reason = f"ORCID record unavailable for {orcid_id}."
         logger.warning(f"No ORCID record found for {orcid_id}; writing placeholder.")

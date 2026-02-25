@@ -6,3 +6,6 @@ __version__ = "0.1.0"
 SECTION_PUBLICATIONS = "publications"
 SECTION_DATA = "data"
 VALID_SECTIONS = [SECTION_PUBLICATIONS, SECTION_DATA]
+
+# Public exceptions
+from .fetch import OrcidFetchError

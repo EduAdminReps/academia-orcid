@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from academia_orcid.fetch import (
+    OrcidFetchError,
     fetch_orcid_record,
     fetch_work_details,
     get_orcid_for_uin,
@@ -360,14 +361,13 @@ def test_fetch_orcid_record_success(mock_requests, tmp_path):
 
 @patch('academia_orcid.fetch.requests')
 def test_fetch_orcid_record_404(mock_requests, tmp_path):
-    """Test handling of 404 Not Found for ORCID record."""
+    """Test that 404 Not Found raises OrcidFetchError."""
     mock_response = Mock()
     mock_response.status_code = 404
     mock_requests.get.return_value = mock_response
 
-    result = fetch_orcid_record("0000-0009-9999-9999", tmp_path)
-
-    assert result is None
+    with pytest.raises(OrcidFetchError, match="HTTP 404"):
+        fetch_orcid_record("0000-0009-9999-9999", tmp_path)
 
 
 @patch('academia_orcid.fetch.requests')
@@ -385,15 +385,14 @@ def test_fetch_orcid_record_invalid_json(mock_requests, tmp_path):
 
 @patch('academia_orcid.fetch.requests')
 def test_fetch_orcid_record_network_error(mock_requests, tmp_path):
-    """Test handling of network errors during fetch."""
+    """Test that network errors raise OrcidFetchError."""
     import requests
     mock_requests.RequestException = requests.RequestException
     mock_requests.Timeout = requests.Timeout
     mock_requests.get.side_effect = requests.RequestException("Network down")
 
-    result = fetch_orcid_record("0000-0001-2345-6789", tmp_path)
-
-    assert result is None
+    with pytest.raises(OrcidFetchError, match="Network error"):
+        fetch_orcid_record("0000-0001-2345-6789", tmp_path)
 
 
 @patch('academia_orcid.fetch.requests')

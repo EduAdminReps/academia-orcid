@@ -32,7 +32,7 @@ from academia_orcid.extract import (
     parse_year_filter,
 )
 from academia_orcid.cli import validate_uin
-from academia_orcid.fetch import get_or_fetch_orcid_record, get_orcid_for_uin, validate_orcid_id
+from academia_orcid.fetch import OrcidFetchError, get_or_fetch_orcid_record, get_orcid_for_uin, validate_orcid_id
 from academia_orcid.json_export import export_data, export_publications
 
 
@@ -140,7 +140,11 @@ def main():
         logger.info(f"Found ORCID {orcid_id} for UIN {uin}")
 
     # Load ORCID record
-    record = get_or_fetch_orcid_record(data_path, orcid_id, None, fetch=fetch_enabled, force=force_fetch)
+    try:
+        record = get_or_fetch_orcid_record(data_path, orcid_id, None, fetch=fetch_enabled, force=force_fetch)
+    except OrcidFetchError as e:
+        logger.error(f"ORCID API fetch failed for {orcid_id}: {e}")
+        sys.exit(2)
     if not record:
         logger.warning(f"No ORCID record found for {orcid_id}; skipping.")
         return

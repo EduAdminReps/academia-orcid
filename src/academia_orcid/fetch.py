@@ -10,6 +10,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
+
+class OrcidFetchError(Exception):
+    """Raised when ORCID API fetch fails (network error, rate limit, server error).
+
+    This distinguishes transient API failures from legitimate "no data" cases
+    (e.g., no ORCID ID on file, --no-fetch with empty cache).
+    """
+    pass
+
 try:
     import requests
     REQUESTS_AVAILABLE = True
@@ -295,7 +304,10 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path, dept: str = None) -> dict 
         dept: Optional department for hierarchical storage
 
     Returns:
-        ORCID record dict, or None if fetch failed
+        ORCID record dict, or None for validation failures (invalid ID, missing requests).
+
+    Raises:
+        OrcidFetchError: On API errors (non-200 status, network errors, timeouts).
     """
     if not REQUESTS_AVAILABLE:
         logger.warning("requests library not available, cannot fetch ORCID record")
@@ -315,62 +327,70 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path, dept: str = None) -> dict 
     url = f"{config.api_base_url}/{orcid_id}/record"
     headers = {"Accept": "application/json"}
 
+    # Fetch main record — network errors become OrcidFetchError
     try:
         response = requests.get(url, headers=headers, timeout=config.api_timeout)
-        if response.status_code != 200:
-            logger.warning(f"ORCID API returned {response.status_code} for {orcid_id}")
-            return None
+    except (requests.RequestException, requests.Timeout) as e:
+        raise OrcidFetchError(
+            f"Network error fetching ORCID record for {orcid_id}: {type(e).__name__}: {e}"
+        ) from e
 
-        try:
-            record = response.json()
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response for {orcid_id}: {e}")
-            return None
+    if response.status_code != 200:
+        raise OrcidFetchError(
+            f"ORCID API returned HTTP {response.status_code} for {orcid_id}"
+        )
 
-        logger.info(f"Successfully fetched main record for {orcid_id}")
+    try:
+        record = response.json()
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse JSON response for {orcid_id}: {e}")
+        return None
 
-        # Fetch detailed work information for each work
-        works = record.get("activities-summary", {}).get("works", {}).get("group", [])
-        if works:
-            # Collect all put-codes first
-            put_codes = []
-            work_group_map = {}  # Map put_code to (work_group_index, summary_index)
+    logger.info(f"Successfully fetched main record for {orcid_id}")
 
-            for group_idx, work_group in enumerate(works):
-                work_summaries = work_group.get("work-summary", [])
-                if work_summaries:
-                    work_summary = work_summaries[0]
-                    put_code = work_summary.get("put-code")
-                    if put_code:
-                        put_code_str = str(put_code)
-                        put_codes.append(put_code_str)
-                        work_group_map[put_code_str] = (group_idx, 0)
+    # Fetch detailed work information for each work
+    works = record.get("activities-summary", {}).get("works", {}).get("group", [])
+    if works:
+        # Collect all put-codes first
+        put_codes = []
+        work_group_map = {}  # Map put_code to (work_group_index, summary_index)
 
-            # Fetch all work details concurrently
-            if put_codes:
-                work_details_map = fetch_work_details_concurrent(
-                    orcid_id,
-                    put_codes,
-                    max_workers=config.max_concurrent_requests,
-                    rate_limit_delay=config.rate_limit_delay
-                )
+        for group_idx, work_group in enumerate(works):
+            work_summaries = work_group.get("work-summary", [])
+            if work_summaries:
+                work_summary = work_summaries[0]
+                put_code = work_summary.get("put-code")
+                if put_code:
+                    put_code_str = str(put_code)
+                    put_codes.append(put_code_str)
+                    work_group_map[put_code_str] = (group_idx, 0)
 
-                # Update work summaries with detailed information
-                for put_code, work_details in work_details_map.items():
-                    if put_code in work_group_map:
-                        group_idx, summary_idx = work_group_map[put_code]
-                        works[group_idx]["work-summary"][summary_idx] = work_details
+        # Fetch all work details concurrently
+        if put_codes:
+            work_details_map = fetch_work_details_concurrent(
+                orcid_id,
+                put_codes,
+                max_workers=config.max_concurrent_requests,
+                rate_limit_delay=config.rate_limit_delay
+            )
 
-        # Add cache metadata before saving
-        record = add_cache_metadata(record)
+            # Update work summaries with detailed information
+            for put_code, work_details in work_details_map.items():
+                if put_code in work_group_map:
+                    group_idx, summary_idx = work_group_map[put_code]
+                    works[group_idx]["work-summary"][summary_idx] = work_details
 
-        # Save to cache
-        json_dir = data_dir / config.cache_dir_name
-        if dept:
-            cache_dir = json_dir / dept
-        else:
-            cache_dir = json_dir
+    # Add cache metadata before saving
+    record = add_cache_metadata(record)
 
+    # Save to cache
+    json_dir = data_dir / config.cache_dir_name
+    if dept:
+        cache_dir = json_dir / dept
+    else:
+        cache_dir = json_dir
+
+    try:
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_file = cache_dir / f"{orcid_id}.json"
 
@@ -378,14 +398,10 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path, dept: str = None) -> dict 
             json.dump(record, f, indent=2)
 
         logger.info(f"Cached ORCID record to {cache_file}")
-        return record
-
-    except (requests.RequestException, requests.Timeout) as e:
-        logger.warning(f"Network error fetching ORCID record for {orcid_id}: {type(e).__name__}: {e}")
-        return None
     except OSError as e:
         logger.warning(f"Failed to write cache file for {orcid_id}: {e}")
-        return None
+
+    return record
 
 
 def get_or_fetch_orcid_record(
@@ -407,7 +423,10 @@ def get_or_fetch_orcid_record(
         cache_ttl: Cache TTL in seconds (default: from config, typically 7 days)
 
     Returns:
-        ORCID record dict, or None if not found/fetch failed
+        ORCID record dict, or None if not found and fetch disabled.
+
+    Raises:
+        OrcidFetchError: Propagated from fetch_orcid_record() on API errors.
     """
     # SECURITY: Validate ORCID ID format (defense in depth - also checked in called functions)
     if not validate_orcid_id(orcid_id):
