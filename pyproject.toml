@@ -18,9 +18,13 @@ dependencies = [
 config = [
     "pyyaml>=6.0",
 ]
+docx = [
+    "python-docx>=1.0",
+]
 dev = [
     "pytest",
     "pyyaml>=6.0",
+    "python-docx>=1.0",
     "ruff",
 ]
 

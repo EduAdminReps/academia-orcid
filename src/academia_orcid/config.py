@@ -34,6 +34,10 @@ DEFAULT_CONFIG = {
         "ttl_seconds": 7 * 24 * 60 * 60,  # 7 days
         "dir_name": "ORCID_JSON",
     },
+    "enrich": {
+        "doi_timeout": 10,
+        "contact_email": "",  # Used in User-Agent for DOI requests; empty = generic
+    },
     "output": {
         "author_limit": 5,
         "json_indent": 2,
@@ -57,6 +61,9 @@ class Config:
 
         # Apply environment variable overrides
         self._apply_env_overrides()
+
+        # Validate after all overrides (env vars included)
+        self._validate_config()
 
     def _load_defaults(self) -> dict[str, Any]:
         """Load default configuration."""
@@ -128,13 +135,13 @@ class Config:
             try:
                 self._config["cache"]["ttl_seconds"] = int(cache_ttl)
             except ValueError:
-                pass
+                logger.warning(f"Invalid ORCID_CACHE_TTL value '{cache_ttl}', ignoring")
 
         if timeout := os.getenv("ORCID_API_TIMEOUT"):
             try:
                 self._config["api"]["timeout"] = int(timeout)
             except ValueError:
-                pass
+                logger.warning(f"Invalid ORCID_API_TIMEOUT value '{timeout}', ignoring")
 
     def get(self, section: str, key: str, default: Any = None) -> Any:
         """Get configuration value.
@@ -204,13 +211,27 @@ class Config:
         """Get JSON output indentation."""
         return self.get("output", "json_indent")
 
+    @property
+    def doi_timeout(self) -> int:
+        """Get DOI content negotiation timeout in seconds."""
+        return self.get("enrich", "doi_timeout")
+
+    @property
+    def contact_email(self) -> str:
+        """Get contact email for DOI request User-Agent header."""
+        return self.get("enrich", "contact_email")
+
 
 # Global default config instance
 _default_config = None
 
 
 def get_config(config_file: Path | None = None) -> Config:
-    """Get configuration instance.
+    """Get or create the global configuration instance.
+
+    If config_file is provided, a new Config is created (replacing any cached
+    instance). If config_file is None and a cached instance exists, the cached
+    instance is returned. Otherwise, default config file locations are searched.
 
     Args:
         config_file: Optional path to config file
@@ -221,6 +242,9 @@ def get_config(config_file: Path | None = None) -> Config:
     global _default_config
 
     if config_file:
+        resolved = config_file.resolve()
+        if _default_config is not None:
+            logger.debug(f"Replacing cached config with new instance from {resolved}")
         _default_config = Config(config_file)
         return _default_config
 

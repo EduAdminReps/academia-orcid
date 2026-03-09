@@ -284,7 +284,7 @@ def fetch_work_details_concurrent(
                     work_detail = future.result()
                     if work_detail:
                         results[put_code] = work_detail
-                except Exception as e:
+                except (requests.RequestException, json.JSONDecodeError, KeyError, ValueError) as e:
                     logger.warning(f"Exception fetching work {put_code}: {type(e).__name__}: {e}")
 
         # Rate limiting between batches

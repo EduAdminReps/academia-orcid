@@ -60,6 +60,17 @@ TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 DEFAULT_OUTPUT_BASE = _REPO_ROOT / "out_cv"
 
 
+def _maybe_enrich(args, journal_articles, conference_papers, other_publications):
+    """Apply DOI enrichment if --enrich flag is set. Returns the (possibly enriched) lists."""
+    if args.enrich:
+        from academia_orcid.enrich import enrich_publications
+        logger.info("Enriching publications via DOI content negotiation...")
+        journal_articles = enrich_publications(journal_articles)
+        conference_papers = enrich_publications(conference_papers)
+        other_publications = enrich_publications(other_publications)
+    return journal_articles, conference_papers, other_publications
+
+
 # ---------------------------------------------------------------------------
 # Person info extraction from ORCID record
 # ---------------------------------------------------------------------------
@@ -105,10 +116,20 @@ def extract_person_info(record: dict) -> dict:
 # LaTeX utilities (adapted from compose_latex.py)
 # ---------------------------------------------------------------------------
 
+def _substitute_template(content: str, variables: dict) -> str:
+    """Substitute %%key%% placeholders in a template string.
+
+    Uses %%key%% delimiters to avoid conflicts with LaTeX braces.
+    """
+    for key, value in variables.items():
+        content = content.replace(f"%%{key}%%", str(value))
+    return content
+
+
 def generate_header(faculty_info: dict, template_path: Path, output_path: Path):
     """Generate header.tex from template with faculty info."""
     content = template_path.read_text()
-    content = content.format(**faculty_info)
+    content = _substitute_template(content, faculty_info)
     # Remove lines where an optional field was empty, e.g. {\Large }\\[1.5em].
     # LaTeX raises "There's no line here to end" when \\ follows an empty group
     # in a center environment. This happens when college/department are absent.
@@ -119,7 +140,7 @@ def generate_header(faculty_info: dict, template_path: Path, output_path: Path):
 def generate_main(display_year: str, template_path: Path, output_path: Path):
     """Generate main.tex from template with report year."""
     content = template_path.read_text()
-    content = content.format(report_year=display_year)
+    content = _substitute_template(content, {"report_year": display_year})
     output_path.write_text(content)
 
 
@@ -200,7 +221,7 @@ def resolve_and_fetch(args) -> tuple[str, dict | None]:
 
     logger.info(f"Using ORCID ID: {orcid_id}")
 
-    fetch_enabled = not args.no_fetch
+    fetch_enabled = args.fetch
     force_fetch = args.force_fetch
 
     record = get_or_fetch_orcid_record(
@@ -295,12 +316,9 @@ def generate_latex_cv(args):
         other_publications = filter_publications_by_year(other_publications, year_filter)
 
     # Optional DOI enrichment
-    if args.enrich:
-        from academia_orcid.enrich import enrich_publications
-        logger.info("Enriching publications via DOI content negotiation...")
-        journal_articles = enrich_publications(journal_articles)
-        conference_papers = enrich_publications(conference_papers)
-        other_publications = enrich_publications(other_publications)
+    journal_articles, conference_papers, other_publications = _maybe_enrich(
+        args, journal_articles, conference_papers, other_publications
+    )
 
     pubs_latex = generate_latex(orcid_id, journal_articles, conference_papers, other_publications)
     if pubs_latex:
@@ -391,12 +409,9 @@ def generate_docx_cv(args):
         other_publications = filter_publications_by_year(other_publications, year_filter)
 
     # Optional DOI enrichment
-    if args.enrich:
-        from academia_orcid.enrich import enrich_publications
-        logger.info("Enriching publications via DOI content negotiation...")
-        journal_articles = enrich_publications(journal_articles)
-        conference_papers = enrich_publications(conference_papers)
-        other_publications = enrich_publications(other_publications)
+    journal_articles, conference_papers, other_publications = _maybe_enrich(
+        args, journal_articles, conference_papers, other_publications
+    )
 
     # Build JSON data
     data_json = export_data(
@@ -474,12 +489,9 @@ def generate_bibtex_cv(args):
         other_publications = filter_publications_by_year(other_publications, year_filter)
 
     # Optional DOI enrichment
-    if args.enrich:
-        from academia_orcid.enrich import enrich_publications
-        logger.info("Enriching publications via DOI content negotiation...")
-        journal_articles = enrich_publications(journal_articles)
-        conference_papers = enrich_publications(conference_papers)
-        other_publications = enrich_publications(other_publications)
+    journal_articles, conference_papers, other_publications = _maybe_enrich(
+        args, journal_articles, conference_papers, other_publications
+    )
 
     # Generate BibTeX
     bibtex_content = export_bibtex(
@@ -524,12 +536,13 @@ def parse_args():
                         help="Base directory for ORCID cache (default: repo root)")
 
     # Fetch control
-    parser.add_argument("--fetch", action="store_true", default=True,
-                        help="Fetch from ORCID API if not cached (default)")
-    parser.add_argument("--no-fetch", action="store_true",
-                        help="Only use cached records")
-    parser.add_argument("--force-fetch", action="store_true",
-                        help="Always fetch from API (refresh cache)")
+    fetch_group = parser.add_mutually_exclusive_group()
+    fetch_group.add_argument("--fetch", dest="fetch", action="store_true", default=True,
+                             help="Fetch from ORCID API if not cached (default)")
+    fetch_group.add_argument("--no-fetch", dest="fetch", action="store_false",
+                             help="Only use cached records")
+    fetch_group.add_argument("--force-fetch", action="store_true",
+                             help="Always fetch from API (refresh cache)")
 
     # Enrichment
     parser.add_argument("--enrich", action="store_true",

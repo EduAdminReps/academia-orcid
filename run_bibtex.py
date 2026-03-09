@@ -13,6 +13,7 @@ import logging
 import sys
 from pathlib import Path
 
+from academia_orcid import OUTPUT_PUBLICATIONS_BIB
 from academia_orcid.config import get_config
 from academia_orcid.logging_config import setup_logging
 from academia_orcid.extract import (
@@ -21,7 +22,7 @@ from academia_orcid.extract import (
     parse_year_filter,
 )
 from academia_orcid.cli import validate_uin
-from academia_orcid.fetch import get_or_fetch_orcid_record, get_orcid_for_uin, validate_orcid_id
+from academia_orcid.fetch import OrcidFetchError, get_or_fetch_orcid_record, get_orcid_for_uin, validate_orcid_id
 from academia_orcid.bibtex_export import export_bibtex
 
 
@@ -38,9 +39,13 @@ def main():
         "--year", default=None,
         help="Year filter (YYYY-YYYY, YYYY, or 'all').",
     )
-    parser.add_argument("--fetch", action="store_true", default=True)
-    parser.add_argument("--no-fetch", action="store_true")
-    parser.add_argument("--force-fetch", action="store_true")
+    fetch_group = parser.add_mutually_exclusive_group()
+    fetch_group.add_argument("--fetch", dest="fetch", action="store_true", default=True,
+                             help="Fetch from ORCID API if not cached (default)")
+    fetch_group.add_argument("--no-fetch", dest="fetch", action="store_false",
+                             help="Only use cached records")
+    fetch_group.add_argument("--force-fetch", action="store_true",
+                             help="Always fetch from API (refresh cache)")
     parser.add_argument("--mapping-db", default=None, help="Path to SQLite with orcid_mapping")
     parser.add_argument(
         "--enrich", action="store_true",
@@ -77,7 +82,7 @@ def main():
     if not args.uin and not args.orcid:
         parser.error("Either --uin or --orcid is required")
 
-    fetch_enabled = args.fetch and not args.no_fetch
+    fetch_enabled = args.fetch
     force_fetch = args.force_fetch
     data_path = Path(args.data_dir)
     output_path = Path(args.output_dir)
@@ -118,7 +123,11 @@ def main():
         logger.info(f"Found ORCID {orcid_id} for UIN {uin}")
 
     # Load ORCID record
-    record = get_or_fetch_orcid_record(data_path, orcid_id, None, fetch=fetch_enabled, force=force_fetch)
+    try:
+        record = get_or_fetch_orcid_record(data_path, orcid_id, None, fetch=fetch_enabled, force=force_fetch)
+    except OrcidFetchError as e:
+        logger.error(f"ORCID API fetch failed for {orcid_id}: {e}")
+        sys.exit(2)
     if not record:
         logger.warning(f"No ORCID record found for {orcid_id}; skipping.")
         return
@@ -146,7 +155,7 @@ def main():
         return
 
     output_path.mkdir(parents=True, exist_ok=True)
-    bib_file = output_path / "orcid-publications.bib"
+    bib_file = output_path / OUTPUT_PUBLICATIONS_BIB
     bib_file.write_text(bibtex_content, encoding="utf-8")
 
     logger.info(f"Generated: {bib_file}")

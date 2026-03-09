@@ -5,6 +5,7 @@ import logging
 import sys
 
 from .config import get_config
+from .schema import CONFERENCE_PAPER_TYPES, JOURNAL_ARTICLE_TYPES
 
 # Module logger
 logger = logging.getLogger("academia_orcid.extract")
@@ -99,14 +100,21 @@ def filter_publications_by_year(
             if start_year <= pub_year <= end_year:
                 filtered.append(pub)
         except ValueError:
-            # Include publications with unparseable years
+            # Include publications with unparseable years but warn
+            title = pub.get("title", "Unknown")[:60]
+            logger.warning(f"Unparseable year '{pub_year_str}' for '{title}'; including in results")
             filtered.append(pub)
 
     return filtered
 
 
-def extract_publications(record: dict) -> tuple[list, list, list]:
-    """Extract journal articles, conference papers, and other from ORCID record."""
+def extract_publications(record: dict, author_limit: int | None = None) -> tuple[list, list, list]:
+    """Extract journal articles, conference papers, and other from ORCID record.
+
+    Args:
+        record: Full ORCID record dict
+        author_limit: Max authors to display before "et al." (default: from config)
+    """
     journal_articles = []
     conference_papers = []
     other_publications = []
@@ -202,8 +210,8 @@ def extract_publications(record: dict) -> tuple[list, list, list]:
             citation_data = work_details.get("citation")
 
             # Format authors (IEEE style: Last, F.M.)
-            config = get_config()
-            author_limit = config.author_limit
+            if author_limit is None:
+                author_limit = get_config().author_limit
             formatted_authors = []
             for author in author_names[:author_limit]:  # Limit to configured number of authors
                 parts = author.split()
@@ -232,9 +240,9 @@ def extract_publications(record: dict) -> tuple[list, list, list]:
             }
 
             # Categorize
-            if pub_type in ["journal-article", "journal-issue", "article-journal"]:
+            if pub_type in JOURNAL_ARTICLE_TYPES:
                 journal_articles.append(pub_entry)
-            elif pub_type in ["conference-paper", "conference-abstract", "conference-poster", "paper-conference"]:
+            elif pub_type in CONFERENCE_PAPER_TYPES:
                 conference_papers.append(pub_entry)
             else:
                 # Include other types (books, book chapters, etc.)
@@ -245,10 +253,16 @@ def extract_publications(record: dict) -> tuple[list, list, list]:
             logger.warning(f"Skipping malformed work entry: {type(e).__name__}")
             continue
 
-    # Sort by year (descending)
-    journal_articles.sort(key=lambda x: x.get("year", "0"), reverse=True)
-    conference_papers.sort(key=lambda x: x.get("year", "0"), reverse=True)
-    other_publications.sort(key=lambda x: x.get("year", "0"), reverse=True)
+    # Sort by year (descending, integer comparison)
+    def _year_sort_key(pub):
+        try:
+            return int(pub.get("year", "0"))
+        except (ValueError, TypeError):
+            return 0
+
+    journal_articles.sort(key=_year_sort_key, reverse=True)
+    conference_papers.sort(key=_year_sort_key, reverse=True)
+    other_publications.sort(key=_year_sort_key, reverse=True)
 
     return journal_articles, conference_papers, other_publications
 

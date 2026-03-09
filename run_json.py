@@ -15,7 +15,13 @@ import logging
 import sys
 from pathlib import Path
 
-from academia_orcid import SECTION_DATA, SECTION_PUBLICATIONS, VALID_SECTIONS
+from academia_orcid import (
+    OUTPUT_DATA_JSON,
+    OUTPUT_PUBLICATIONS_JSON,
+    SECTION_DATA,
+    SECTION_PUBLICATIONS,
+    VALID_SECTIONS,
+)
 from academia_orcid.config import get_config
 from academia_orcid.logging_config import setup_logging
 from academia_orcid.extract import (
@@ -55,9 +61,13 @@ def main():
         "--year", default=None,
         help="Year filter (YYYY-YYYY, YYYY, or 'all'). Ignored for --section data.",
     )
-    parser.add_argument("--fetch", action="store_true", default=True)
-    parser.add_argument("--no-fetch", action="store_true")
-    parser.add_argument("--force-fetch", action="store_true")
+    fetch_group = parser.add_mutually_exclusive_group()
+    fetch_group.add_argument("--fetch", dest="fetch", action="store_true", default=True,
+                             help="Fetch from ORCID API if not cached (default)")
+    fetch_group.add_argument("--no-fetch", dest="fetch", action="store_false",
+                             help="Only use cached records")
+    fetch_group.add_argument("--force-fetch", action="store_true",
+                             help="Always fetch from API (refresh cache)")
     parser.add_argument("--mapping-db", default=None, help="Path to SQLite with orcid_mapping")
     parser.add_argument(
         "--config",
@@ -90,7 +100,7 @@ def main():
     if not args.uin and not args.orcid:
         parser.error("Either --uin or --orcid is required")
 
-    fetch_enabled = args.fetch and not args.no_fetch
+    fetch_enabled = args.fetch
     force_fetch = args.force_fetch
     data_path = Path(args.data_dir)
     output_path = Path(args.output_dir)
@@ -99,9 +109,9 @@ def main():
 
     # Determine output filename
     if section == SECTION_PUBLICATIONS:
-        output_filename = "orcid-publications.json"
+        output_filename = OUTPUT_PUBLICATIONS_JSON
     else:
-        output_filename = "orcid-data.json"
+        output_filename = OUTPUT_DATA_JSON
 
     # Resolve ORCID ID
     if args.orcid:

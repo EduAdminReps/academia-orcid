@@ -87,7 +87,7 @@ def _split_math_regions(text: str) -> list[tuple[bool, str]]:
     parts = []
     last_end = 0
 
-    for m in re.finditer(r'\$[^$]+\$', text):
+    for m in re.finditer(r'(?<!\\)\$[^$]+\$', text):
         # Add non-math text before this match
         if m.start() > last_end:
             parts.append((False, text[last_end:m.start()]))

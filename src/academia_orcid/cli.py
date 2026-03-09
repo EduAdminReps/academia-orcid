@@ -6,7 +6,13 @@ import re
 import sys
 from pathlib import Path
 
-from academia_orcid import SECTION_DATA, SECTION_PUBLICATIONS, VALID_SECTIONS
+from academia_orcid import (
+    OUTPUT_DATA_TEX,
+    OUTPUT_PUBLICATIONS_TEX,
+    SECTION_DATA,
+    SECTION_PUBLICATIONS,
+    VALID_SECTIONS,
+)
 from academia_orcid.config import get_config
 from academia_orcid.logging_config import setup_logging
 from academia_orcid.extract import (
@@ -77,18 +83,21 @@ def main():
         help="Year filter for publications (YYYY-YYYY range, YYYY single year, or 'all'). "
              "Ignored for --section data."
     )
-    parser.add_argument(
+    fetch_group = parser.add_mutually_exclusive_group()
+    fetch_group.add_argument(
         "--fetch",
+        dest="fetch",
         action="store_true",
         default=True,
-        help="Fetch ORCID record from API if not in cache (default: True)"
+        help="Fetch ORCID record from API if not in cache (default)"
     )
-    parser.add_argument(
+    fetch_group.add_argument(
         "--no-fetch",
-        action="store_true",
+        dest="fetch",
+        action="store_false",
         help="Do not fetch from API, only use cached records"
     )
-    parser.add_argument(
+    fetch_group.add_argument(
         "--force-fetch",
         action="store_true",
         help="Always fetch from API, even if cached record exists (refreshes cache)"
@@ -132,7 +141,7 @@ def main():
         parser.error("Either --uin or --orcid is required")
 
     # Handle fetch flags
-    fetch_enabled = args.fetch and not args.no_fetch
+    fetch_enabled = args.fetch
     force_fetch = args.force_fetch
 
     data_path = Path(args.data_dir)
@@ -148,9 +157,9 @@ def main():
 
     # Determine output file based on section type
     if section == SECTION_PUBLICATIONS:
-        output_filename = "orcid-publications.tex"
+        output_filename = OUTPUT_PUBLICATIONS_TEX
     else:
-        output_filename = "orcid-data.tex"
+        output_filename = OUTPUT_DATA_TEX
 
     # Resolve ORCID ID: either directly provided or looked up from UIN
     if args.orcid:

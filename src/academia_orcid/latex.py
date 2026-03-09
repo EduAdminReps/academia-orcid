@@ -37,7 +37,13 @@ def sanitize_url_for_latex(url: str) -> str:
 
 
 def escape_latex(text: str) -> str:
-    """Escape special LaTeX characters."""
+    """Escape special LaTeX characters.
+
+    Strips characters outside the Latin-1 range (U+0000-U+00FF). Accented
+    Latin characters (e, n, u) are kept; CJK, Arabic, and other non-Latin
+    scripts are silently removed because pdflatex cannot render them without
+    specialized packages. This only affects LaTeX/PDF output.
+    """
     if not text:
         return ""
     # Order matters: escape backslash first to prevent double-escaping

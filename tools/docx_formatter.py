@@ -289,7 +289,13 @@ def _render_publications(doc, data):
 
 def _add_table(doc, headers, rows, *, col_widths=None, font_size=None):
     """Add a formatted table with a header row."""
-    table = doc.add_table(rows=1, cols=len(headers), style="Table Grid")
+    num_cols = len(headers)
+
+    if col_widths and len(col_widths) != num_cols:
+        logger.warning(f"col_widths length ({len(col_widths)}) != headers ({num_cols}); ignoring col_widths")
+        col_widths = None
+
+    table = doc.add_table(rows=1, cols=num_cols, style="Table Grid")
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
 
     if col_widths:
@@ -311,7 +317,7 @@ def _add_table(doc, headers, rows, *, col_widths=None, font_size=None):
     # Data rows
     for row_data in rows:
         row = table.add_row()
-        for i, value in enumerate(row_data):
+        for i, value in enumerate(row_data[:num_cols]):
             cell = row.cells[i]
             raw = str(value) if value is not None else ""
             cell.text = raw.replace("--", "-")
@@ -440,12 +446,3 @@ def _add_toc(doc):
     fldChar = OxmlElement("w:fldChar")
     fldChar.set(qn("w:fldCharType"), "end")
     run._element.append(fldChar)
-
-
-def _add_caption(doc, text):
-    """Add an italic, centered caption paragraph."""
-    para = doc.add_paragraph()
-    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = para.add_run(text)
-    run.font.size = Pt(9)
-    run.font.italic = True

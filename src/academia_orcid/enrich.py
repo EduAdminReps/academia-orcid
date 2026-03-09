@@ -15,6 +15,8 @@ import time
 
 import requests
 
+from academia_orcid.config import get_config
+
 logger = logging.getLogger("academia_orcid.enrich")
 
 # Fields that can be filled from DOI metadata (only if empty in ORCID data)
@@ -32,9 +34,15 @@ def fetch_doi_metadata(doi: str, timeout: int = 10) -> dict | None:
         CSL-JSON dict if successful, None on any failure.
     """
     url = f"https://doi.org/{doi}"
+    config = get_config()
+    contact = config.contact_email
+    if contact:
+        user_agent = f"academia-orcid/1.0 (mailto:{contact})"
+    else:
+        user_agent = "academia-orcid/1.0"
     headers = {
         "Accept": "application/vnd.citationstyles.csl+json",
-        "User-Agent": "academia-orcid/1.0 (mailto:engineering@tamu.edu)",
+        "User-Agent": user_agent,
     }
 
     try:
@@ -160,7 +168,7 @@ def _needs_enrichment(pub: dict) -> bool:
 def enrich_publications(
     publications: list[dict],
     rate_limit_delay: float = 0.3,
-    timeout: int = 10,
+    timeout: int | None = None,
 ) -> list[dict]:
     """Enrich a list of publications via DOI content negotiation.
 
@@ -170,11 +178,13 @@ def enrich_publications(
     Args:
         publications: List of publication dicts from extract_publications()
         rate_limit_delay: Delay in seconds between DOI requests
-        timeout: Request timeout in seconds per DOI lookup
+        timeout: Request timeout in seconds per DOI lookup (default: from config)
 
     Returns:
         The same list with empty fields filled where possible.
     """
+    if timeout is None:
+        timeout = get_config().doi_timeout
     if not publications:
         return publications
 

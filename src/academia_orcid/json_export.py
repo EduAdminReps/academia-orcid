@@ -45,7 +45,8 @@ def export_data(
         services: List of service dicts
 
     Returns:
-        Dict ready for JSON serialization
+        Dict ready for JSON serialization, or empty dict if no data found.
+        An empty dict means "no data" (successful extraction, no content).
     """
     has_content = any([
         biography,
@@ -95,7 +96,8 @@ def export_publications(
         other_publications: List of other publication dicts
 
     Returns:
-        Dict ready for JSON serialization
+        Dict ready for JSON serialization, or empty dict if no publications found.
+        An empty dict means "no data" (successful extraction, no content).
     """
     total = len(journal_articles) + len(conference_papers) + len(other_publications)
 
