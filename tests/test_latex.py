@@ -27,6 +27,23 @@ def test_escape_latex_empty():
     assert escape_latex("") == ""
 
 
+def test_escape_latex_backslash_braces_not_reescaped():
+    """Regression: chained replaces turned x\\y into x\\textbackslash\\{\\}y."""
+    assert escape_latex(r"x\y") == r"x\textbackslash{}y"
+
+
+def test_escape_latex_tilde_caret_braces_not_reescaped():
+    assert escape_latex("a~b^c") == r"a\textasciitilde{}b\textasciicircum{}c"
+
+
+def test_escape_latex_braces():
+    assert escape_latex("{x}") == r"\{x\}"
+
+
+def test_escape_latex_strips_non_latin1_after_escaping():
+    assert escape_latex("Café & 北京") == r"Café \& "
+
+
 # ── format_date_range ──────────────────────────────────────────────────────
 
 

@@ -12,6 +12,23 @@ import re
 # are kept — pdflatex handles them with \usepackage[utf8]{inputenc} + lmodern.
 _NON_LATIN1_RE = re.compile(r'[^\x00-\xff]')
 
+# Every LaTeX special character and its text-mode replacement. Applied in a
+# single pass (str.translate), so a replacement is never itself re-escaped:
+# chained str.replace calls turned "\" into "\textbackslash{}" and then escaped
+# its braces, rendering "x\y" as "x\{}y".
+_LATEX_SPECIALS = str.maketrans({
+    "\\": r"\textbackslash{}",
+    "&": r"\&",
+    "%": r"\%",
+    "$": r"\$",
+    "#": r"\#",
+    "_": r"\_",
+    "{": r"\{",
+    "}": r"\}",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+})
+
 
 def sanitize_url_for_latex(url: str) -> str:
     """Sanitize a URL for safe use inside LaTeX \\href{}{}.
@@ -46,21 +63,7 @@ def escape_latex(text: str) -> str:
     """
     if not text:
         return ""
-    # Order matters: escape backslash first to prevent double-escaping
-    replacements = [
-        ("\\", r"\textbackslash{}"),
-        ("&", r"\&"),
-        ("%", r"\%"),
-        ("$", r"\$"),
-        ("#", r"\#"),
-        ("_", r"\_"),
-        ("{", r"\{"),
-        ("}", r"\}"),
-        ("~", r"\textasciitilde{}"),
-        ("^", r"\textasciicircum{}"),
-    ]
-    for old, new in replacements:
-        text = text.replace(old, new)
+    text = text.translate(_LATEX_SPECIALS)
     # Strip characters outside Latin-1 that pdflatex cannot render
     text = _NON_LATIN1_RE.sub('', text)
     return text
