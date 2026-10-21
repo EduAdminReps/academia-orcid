@@ -105,25 +105,25 @@ Schema documentation: [src/academia_orcid/schema.py](src/academia_orcid/schema.p
 
 ```bash
 # Generate publications section (default)
-python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/shared.db
+python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/en.db
 # Produces: ./out/orcid-publications.tex
 
 # Generate ORCID data section (employment, memberships, etc.)
-python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/shared.db --section data
+python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/en.db --section data
 # Produces: ./out/orcid-data.tex
 
 # JSON output (same CLI contract)
-python run_json.py --uin <uin> --output-dir ./out --mapping-db /path/to/shared.db
+python run_json.py --uin <uin> --output-dir ./out --mapping-db /path/to/en.db
 # Produces: ./out/orcid-publications.json
 
 # With year filter (publications only)
-python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/shared.db --year 2024-2025
+python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/en.db --year 2024-2025
 
 # Using ORCID ID directly (bypasses UIN→ORCID mapping)
 python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out
 
 # Force-refresh cached ORCID record from API
-python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/shared.db --force-fetch
+python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/en.db --force-fetch
 
 # All options
 python run_latex.py [--uin <uin> --mapping-db <path> | --orcid <orcid>] --output-dir <path> [--data-dir <path>] [--section {publications,data}] [--year <year>] [--fetch | --no-fetch | --force-fetch]

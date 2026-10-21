@@ -47,7 +47,7 @@ python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out --section dat
 python run_json.py --orcid 0000-0002-2983-9884 --output-dir ./out
 
 # Using UIN (requires mapping database)
-python run_latex.py --uin 123456789 --output-dir ./out --mapping-db /path/to/shared.db
+python run_latex.py --uin 123456789 --output-dir ./out --mapping-db /path/to/en.db
 
 # Year filter
 python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out --year 2020-2025

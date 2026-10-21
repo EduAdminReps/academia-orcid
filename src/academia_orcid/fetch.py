@@ -125,11 +125,12 @@ def add_cache_metadata(record: dict) -> dict:
 
 
 def get_orcid_for_uin(db_path: Path, uin: str) -> str | None:
-    """Look up ORCID ID for a UIN from SQLite (shared.db).
+    """Look up ORCID ID for a UIN from SQLite (en.db).
 
     Returns ORCID ID string, or None if not found.
     """
-    conn = sqlite3.connect(db_path)
+    # Read-only: a wrong path fails instead of creating an empty database.
+    conn = sqlite3.connect(f"{Path(db_path).resolve().as_uri()}?mode=ro", uri=True)
     try:
         cur = conn.execute(
             "SELECT ORCID FROM orcid_mapping WHERE UIN = ?", (uin,)
