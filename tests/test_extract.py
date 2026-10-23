@@ -10,87 +10,65 @@ from academia_orcid.extract import (
     extract_memberships,
     extract_publications,
     extract_services,
-    filter_publications_by_year,
-    parse_year_filter,
+    filter_publications_by_period,
 )
+from academia_orcid.periods import ALL, period_from_flag
 
 
-# ── parse_year_filter ──────────────────────────────────────────────────────
+# ── filter_publications_by_period ──────────────────────────────────────────
+# Parsing and the meaning of the flags are tested in coe-data-core
+# (tests/test_periods.py); a publication's year is a calendar year.
 
 
-def test_parse_year_filter_range():
-    assert parse_year_filter("2020-2025") == (2020, 2025)
-
-
-def test_parse_year_filter_single():
-    assert parse_year_filter("2024") == (2024, 2024)
-
-
-def test_parse_year_filter_all():
-    assert parse_year_filter("all") is None
-
-
-def test_parse_year_filter_none():
-    assert parse_year_filter(None) is None
-
-
-def test_parse_year_filter_invalid():
-    assert parse_year_filter("abc") is None
-
-
-def test_parse_year_filter_reversed_range():
-    """Test that reversed year ranges (start > end) are rejected."""
-    assert parse_year_filter("2025-2020") is None
-
-
-def test_parse_year_filter_out_of_bounds_start():
-    """Test that years before 1900 are rejected."""
-    assert parse_year_filter("1800-2020") is None
-    assert parse_year_filter("1899") is None
-
-
-def test_parse_year_filter_out_of_bounds_end():
-    """Test that years after 2100 are rejected."""
-    assert parse_year_filter("2020-2101") is None
-    assert parse_year_filter("3000") is None
-
-
-def test_parse_year_filter_boundary_valid():
-    """Test that boundary years (1900, 2100) are accepted."""
-    assert parse_year_filter("1900-2100") == (1900, 2100)
-    assert parse_year_filter("1900") == (1900, 1900)
-    assert parse_year_filter("2100") == (2100, 2100)
-
-
-# ── filter_publications_by_year ────────────────────────────────────────────
-
-
-def test_filter_by_year_range():
+def test_filter_by_calendar_range():
     pubs = [
         {"title": "Old", "year": "2018"},
         {"title": "In range", "year": "2022"},
         {"title": "Recent", "year": "2024"},
     ]
-    result = filter_publications_by_year(pubs, (2020, 2025))
-    assert len(result) == 2
-    assert result[0]["title"] == "In range"
-    assert result[1]["title"] == "Recent"
+    result = filter_publications_by_period(pubs, period_from_flag("cal_year", "2020-2025"))
+    assert [p["title"] for p in result] == ["In range", "Recent"]
 
 
-def test_filter_by_year_none():
+def test_filter_all_years_keeps_everything():
     pubs = [{"title": "A", "year": "2020"}, {"title": "B", "year": "2024"}]
-    result = filter_publications_by_year(pubs, None)
-    assert len(result) == 2
+    assert filter_publications_by_period(pubs, ALL) == pubs
 
 
-def test_filter_by_year_missing_year():
+def test_filter_fiscal_year_spans_two_calendar_years():
+    # FY2024 = Fall 2023 + Spring 2024
+    pubs = [{"title": y, "year": y} for y in ("2022", "2023", "2024", "2025")]
+    result = filter_publications_by_period(pubs, period_from_flag("year", "2024"))
+    assert [p["title"] for p in result] == ["2023", "2024"]
+
+
+def test_filter_academic_year_spans_two_calendar_years():
+    pubs = [{"title": y, "year": y} for y in ("2022", "2023", "2024", "2025")]
+    result = filter_publications_by_period(pubs, period_from_flag("acad_year", "2024"))
+    assert [p["title"] for p in result] == ["2023", "2024"]
+
+
+def test_filter_open_ended():
+    pubs = [{"title": y, "year": y} for y in ("2019", "2020", "2026")]
+    result = filter_publications_by_period(pubs, period_from_flag("cal_year", "2020+"))
+    assert [p["title"] for p in result] == ["2020", "2026"]
+
+
+def test_filter_semester():
+    pubs = [{"title": y, "year": y} for y in ("2023", "2024")]
+    result = filter_publications_by_period(pubs, period_from_flag("semester", "202431"))
+    assert [p["title"] for p in result] == ["2024"]
+
+
+def test_filter_missing_or_unparseable_year_kept():
     pubs = [
         {"title": "No year", "year": ""},
+        {"title": "Odd year", "year": "circa 2020"},
         {"title": "Has year", "year": "2022"},
+        {"title": "Out", "year": "2010"},
     ]
-    result = filter_publications_by_year(pubs, (2020, 2025))
-    # Publications with no year are always included
-    assert len(result) == 2
+    result = filter_publications_by_period(pubs, period_from_flag("cal_year", "2020-2025"))
+    assert [p["title"] for p in result] == ["No year", "Odd year", "Has year"]
 
 
 # ── extract_publications ───────────────────────────────────────────────────

@@ -25,8 +25,7 @@ from academia_orcid.extract import (
     extract_memberships,
     extract_publications,
     extract_services,
-    filter_publications_by_year,
-    parse_year_filter,
+    filter_publications_by_period,
 )
 from academia_orcid.fetch import (
     OrcidFetchError,
@@ -35,6 +34,7 @@ from academia_orcid.fetch import (
     validate_orcid_id,
 )
 from academia_orcid.latex import generate_data_latex, generate_latex, generate_unavailable_latex
+from academia_orcid.periods import Period, add_period_args, period_from_args
 
 
 def validate_uin(uin: str) -> bool:
@@ -51,6 +51,19 @@ def validate_uin(uin: str) -> bool:
     if not uin or not isinstance(uin, str):
         return False
     return bool(re.match(r'^\d{9}$', uin))
+
+
+def resolve_period(args: argparse.Namespace) -> Period:
+    """The report period from --year / --acad_year / --cal_year / --semester.
+
+    Same meaning in every COE repo (``academia_orcid.periods``); no flag means
+    all years. Exits 1 with a message on a malformed value (fail fast).
+    """
+    try:
+        return period_from_args(args)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def _write_unavailable(output_path: Path, output_filename: str, section: str, reason: str, logger: logging.Logger):
@@ -77,12 +90,7 @@ def main():
         choices=VALID_SECTIONS,
         help="Section to generate: publications or data"
     )
-    parser.add_argument(
-        "--year",
-        default=None,
-        help="Year filter for publications (YYYY-YYYY range, YYYY single year, or 'all'). "
-             "Ignored for --section data."
-    )
+    add_period_args(parser)  # publications only; ignored for --section data
     fetch_group = parser.add_mutually_exclusive_group()
     fetch_group.add_argument(
         "--fetch",
@@ -147,13 +155,13 @@ def main():
     data_path = Path(args.data_dir)
     output_path = Path(args.output_dir)
     section = args.section
-    year_filter = parse_year_filter(args.year) if section == SECTION_PUBLICATIONS else None
+    period = resolve_period(args)
 
-    # Log year filter status
-    if args.year and section == SECTION_DATA:
-        logger.info("Note: --year is ignored for --section data (all data included)")
-    elif year_filter:
-        logger.info(f"Year filter: {year_filter[0]}-{year_filter[1]}")
+    # Log period status
+    if not period.is_all and section == SECTION_DATA:
+        logger.info("Note: the period is ignored for --section data (all data included)")
+    elif not period.is_all:
+        logger.info(f"Period: {period.label()}")
 
     # Determine output file based on section type
     if section == SECTION_PUBLICATIONS:
@@ -223,13 +231,13 @@ def main():
         journal_articles, conference_papers, other_publications = extract_publications(record)
         total_before = len(journal_articles) + len(conference_papers) + len(other_publications)
 
-        # Apply year filter if specified
-        if year_filter:
-            journal_articles = filter_publications_by_year(journal_articles, year_filter)
-            conference_papers = filter_publications_by_year(conference_papers, year_filter)
-            other_publications = filter_publications_by_year(other_publications, year_filter)
+        # Keep publications overlapping the period
+        if not period.is_all:
+            journal_articles = filter_publications_by_period(journal_articles, period)
+            conference_papers = filter_publications_by_period(conference_papers, period)
+            other_publications = filter_publications_by_period(other_publications, period)
             total_after = len(journal_articles) + len(conference_papers) + len(other_publications)
-            logger.info(f"Found {total_before} publications, {total_after} after year filter ({year_filter[0]}-{year_filter[1]})")
+            logger.info(f"Found {total_before} publications, {total_after} in {period.label()}")
         else:
             logger.info(f"Found {len(journal_articles)} journal articles, {len(conference_papers)} conference papers, {len(other_publications)} other")
 

@@ -10,7 +10,7 @@ See CLAUDE.md "Standalone CV Tool" section for upstream sync policy.
 Usage:
     python tools/compose_cv.py --orcid 0000-0003-0831-6109
     python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format docx
-    python tools/compose_cv.py --orcid 0000-0003-0831-6109 --year 2020-2025
+    python tools/compose_cv.py --orcid 0000-0003-0831-6109 --cal_year 2020-2025
     python tools/compose_cv.py --orcid 0000-0003-0831-6109 --skip-compile
 """
 
@@ -39,8 +39,7 @@ from academia_orcid.extract import (
     extract_memberships,
     extract_publications,
     extract_services,
-    filter_publications_by_year,
-    parse_year_filter,
+    filter_publications_by_period,
 )
 from academia_orcid.fetch import (
     get_or_fetch_orcid_record,
@@ -53,6 +52,8 @@ from academia_orcid.latex import (
     generate_latex,
 )
 from academia_orcid.logging_config import setup_logging
+from academia_orcid.cli import resolve_period
+from academia_orcid.periods import add_period_args
 
 logger = logging.getLogger("compose_cv")
 
@@ -251,13 +252,11 @@ def generate_latex_cv(args):
     if person["department"]:
         logger.info(f"Department: {person['department']}")
 
-    # Year filter
-    year_filter = parse_year_filter(args.year)
-    if year_filter:
-        display_year = f"{year_filter[0]}-{year_filter[1]}"
-        logger.info(f"Year filter: {display_year}")
-    else:
-        display_year = "All Years"
+    # Report period (publications only)
+    period = resolve_period(args)
+    display_year = period.label()
+    if not period.is_all:
+        logger.info(f"Period: {display_year}")
 
     # Output directory
     output_dir = Path(args.output_dir) if args.output_dir else DEFAULT_OUTPUT_BASE / orcid_id
@@ -310,10 +309,9 @@ def generate_latex_cv(args):
     logger.info("Generating publications section...")
     journal_articles, conference_papers, other_publications = extract_publications(record)
 
-    if year_filter:
-        journal_articles = filter_publications_by_year(journal_articles, year_filter)
-        conference_papers = filter_publications_by_year(conference_papers, year_filter)
-        other_publications = filter_publications_by_year(other_publications, year_filter)
+    journal_articles = filter_publications_by_period(journal_articles, period)
+    conference_papers = filter_publications_by_period(conference_papers, period)
+    other_publications = filter_publications_by_period(other_publications, period)
 
     # Optional DOI enrichment
     journal_articles, conference_papers, other_publications = _maybe_enrich(
@@ -374,13 +372,11 @@ def generate_docx_cv(args):
     person = extract_person_info(record)
     logger.info(f"Faculty: {person['name']}")
 
-    # Year filter
-    year_filter = parse_year_filter(args.year)
-    if year_filter:
-        year_display = f"{year_filter[0]}-{year_filter[1]}"
-        logger.info(f"Year filter: {year_display}")
-    else:
-        year_display = None
+    # Report period (publications only)
+    period = resolve_period(args)
+    year_display = None if period.is_all else period.label()
+    if year_display:
+        logger.info(f"Period: {year_display}")
 
     # Output directory
     output_dir = Path(args.output_dir) if args.output_dir else DEFAULT_OUTPUT_BASE / orcid_id
@@ -403,10 +399,9 @@ def generate_docx_cv(args):
     services = extract_services(record)
 
     journal_articles, conference_papers, other_publications = extract_publications(record)
-    if year_filter:
-        journal_articles = filter_publications_by_year(journal_articles, year_filter)
-        conference_papers = filter_publications_by_year(conference_papers, year_filter)
-        other_publications = filter_publications_by_year(other_publications, year_filter)
+    journal_articles = filter_publications_by_period(journal_articles, period)
+    conference_papers = filter_publications_by_period(conference_papers, period)
+    other_publications = filter_publications_by_period(other_publications, period)
 
     # Optional DOI enrichment
     journal_articles, conference_papers, other_publications = _maybe_enrich(
@@ -465,10 +460,10 @@ def generate_bibtex_cv(args):
     person = extract_person_info(record)
     logger.info(f"Faculty: {person['name']}")
 
-    # Year filter
-    year_filter = parse_year_filter(args.year)
-    if year_filter:
-        logger.info(f"Year filter: {year_filter[0]}-{year_filter[1]}")
+    # Report period
+    period = resolve_period(args)
+    if not period.is_all:
+        logger.info(f"Period: {period.label()}")
 
     # Output directory
     output_dir = Path(args.output_dir) if args.output_dir else DEFAULT_OUTPUT_BASE / orcid_id
@@ -483,10 +478,9 @@ def generate_bibtex_cv(args):
     # Extract publications
     journal_articles, conference_papers, other_publications = extract_publications(record)
 
-    if year_filter:
-        journal_articles = filter_publications_by_year(journal_articles, year_filter)
-        conference_papers = filter_publications_by_year(conference_papers, year_filter)
-        other_publications = filter_publications_by_year(other_publications, year_filter)
+    journal_articles = filter_publications_by_period(journal_articles, period)
+    conference_papers = filter_publications_by_period(conference_papers, period)
+    other_publications = filter_publications_by_period(other_publications, period)
 
     # Optional DOI enrichment
     journal_articles, conference_papers, other_publications = _maybe_enrich(
@@ -528,8 +522,7 @@ def parse_args():
     )
 
     # Options
-    parser.add_argument("--year", default=None,
-                        help="Year filter for publications (YYYY-YYYY, YYYY, or 'all')")
+    add_period_args(parser)  # filters publications; see academia_orcid.periods
     parser.add_argument("--output-dir", default=None,
                         help="Output directory (default: out_cv/<orcid-id>/)")
     parser.add_argument("--data-dir", default=str(_REPO_ROOT),

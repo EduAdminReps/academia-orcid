@@ -2,107 +2,40 @@
 
 import html
 import logging
+import re
 import sys
 
 from .config import get_config
+from .periods import Period
 from .schema import CONFERENCE_PAPER_TYPES, JOURNAL_ARTICLE_TYPES
 
 # Module logger
 logger = logging.getLogger("academia_orcid.extract")
 
 
-def parse_year_filter(year_arg: str | None) -> tuple[int, int] | None:
-    """Parse year argument into a (start_year, end_year) tuple.
+def filter_publications_by_period(publications: list[dict], period: Period) -> list[dict]:
+    """Keep publications whose year (a calendar year) overlaps the report period.
 
-    Formats:
-        - "YYYY-YYYY": Academic year range (e.g., "2024-2025")
-        - "YYYY": Single calendar year (e.g., "2024" -> 2024-2024)
-        - "all": Include all data (returns None)
-        - None: No filter specified (returns None)
-
-    Returns:
-        Tuple of (start_year, end_year) as integers, or None for no filtering.
+    The period comes from the shared flags (``academia_orcid.periods``): with
+    ``--year 2024`` (fiscal: Fall 2023 + Spring 2024) both 2023 and 2024
+    publications are kept. A publication with no year or an unparseable year
+    is kept (unknown dates match every period); the latter with a warning.
     """
-    if year_arg is None or year_arg.lower() == "all":
-        return None
-
-    year_arg = year_arg.strip()
-
-    # Range format: YYYY-YYYY
-    if "-" in year_arg:
-        parts = year_arg.split("-")
-        if len(parts) == 2:
-            try:
-                start = int(parts[0])
-                end = int(parts[1])
-
-                # Validate year bounds (1900-2100 is reasonable range)
-                if start < 1900 or start > 2100:
-                    logger.warning(f"Start year {start} out of reasonable range (1900-2100), ignoring filter")
-                    return None
-                if end < 1900 or end > 2100:
-                    logger.warning(f"End year {end} out of reasonable range (1900-2100), ignoring filter")
-                    return None
-
-                # Validate start <= end
-                if start > end:
-                    logger.warning(f"Invalid year range '{year_arg}' (start > end), ignoring filter")
-                    return None
-
-                return (start, end)
-            except ValueError:
-                logger.warning(f"Invalid year range '{year_arg}', ignoring filter")
-                return None
-
-    # Single year format: YYYY
-    try:
-        year = int(year_arg)
-
-        # Validate year bounds
-        if year < 1900 or year > 2100:
-            logger.warning(f"Year {year} out of reasonable range (1900-2100), ignoring filter")
-            return None
-
-        return (year, year)
-    except ValueError:
-        logger.warning(f"Invalid year '{year_arg}', ignoring filter")
-        return None
-
-
-def filter_publications_by_year(
-    publications: list[dict],
-    year_range: tuple[int, int] | None
-) -> list[dict]:
-    """Filter publications to only include those within the year range.
-
-    Args:
-        publications: List of publication dicts with 'year' field
-        year_range: Tuple of (start_year, end_year) or None for no filtering
-
-    Returns:
-        Filtered list of publications
-    """
-    if year_range is None:
+    if period.is_all:
         return publications
 
-    start_year, end_year = year_range
     filtered = []
-
     for pub in publications:
-        pub_year_str = pub.get("year", "")
+        pub_year_str = str(pub.get("year", "") or "").strip()
         if not pub_year_str:
-            # Include publications with no year (can't filter them out)
             filtered.append(pub)
             continue
-
-        try:
-            pub_year = int(pub_year_str)
-            if start_year <= pub_year <= end_year:
-                filtered.append(pub)
-        except ValueError:
-            # Include publications with unparseable years but warn
+        if not re.fullmatch(r"\d{4}", pub_year_str):
             title = pub.get("title", "Unknown")[:60]
             logger.warning(f"Unparseable year '{pub_year_str}' for '{title}'; including in results")
+            filtered.append(pub)
+            continue
+        if period.overlaps_year(pub_year_str):
             filtered.append(pub)
 
     return filtered

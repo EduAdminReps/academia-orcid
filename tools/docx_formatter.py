@@ -137,7 +137,7 @@ def _add_header(doc, identity, meta):
         year_para = doc.add_paragraph()
         year_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         year_para.paragraph_format.space_before = Pt(10)
-        run = year_para.add_run(f"Report Year: {year_filter}")
+        run = year_para.add_run(f"Report period: {year_filter}")
         run.font.size = Pt(11)
 
     # Spacing before TOC

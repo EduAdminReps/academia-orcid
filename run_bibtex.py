@@ -2,7 +2,8 @@
 """CLI entry point for ORCID BibTeX export.
 
 Parallel to run_latex.py (LaTeX) and run_json.py (JSON), this outputs
-a .bib file. Same CLI contract: --uin, --output-dir, --year.
+a .bib file. Same CLI contract: --uin, --output-dir, and the period flags
+(--year, --acad_year, --cal_year, --semester; academia_orcid.periods).
 
 Output:
     {output-dir}/orcid-publications.bib
@@ -18,12 +19,12 @@ from academia_orcid.config import get_config
 from academia_orcid.logging_config import setup_logging
 from academia_orcid.extract import (
     extract_publications,
-    filter_publications_by_year,
-    parse_year_filter,
+    filter_publications_by_period,
 )
-from academia_orcid.cli import validate_uin
+from academia_orcid.cli import resolve_period, validate_uin
 from academia_orcid.fetch import OrcidFetchError, get_or_fetch_orcid_record, get_orcid_for_uin, validate_orcid_id
 from academia_orcid.bibtex_export import export_bibtex
+from academia_orcid.periods import add_period_args
 
 
 def main():
@@ -35,10 +36,7 @@ def main():
     parser.add_argument("--orcid", default=None, help="ORCID ID directly")
     parser.add_argument("--output-dir", required=True, help="Output directory")
     parser.add_argument("--data-dir", default=".", help="Base directory for ORCID cache")
-    parser.add_argument(
-        "--year", default=None,
-        help="Year filter (YYYY-YYYY, YYYY, or 'all').",
-    )
+    add_period_args(parser)
     fetch_group = parser.add_mutually_exclusive_group()
     fetch_group.add_argument("--fetch", dest="fetch", action="store_true", default=True,
                              help="Fetch from ORCID API if not cached (default)")
@@ -86,7 +84,7 @@ def main():
     force_fetch = args.force_fetch
     data_path = Path(args.data_dir)
     output_path = Path(args.output_dir)
-    year_filter = parse_year_filter(args.year)
+    period = resolve_period(args)
 
     # Resolve ORCID ID
     if args.orcid:
@@ -135,10 +133,9 @@ def main():
     # Extract and export
     journal_articles, conference_papers, other_publications = extract_publications(record)
 
-    if year_filter:
-        journal_articles = filter_publications_by_year(journal_articles, year_filter)
-        conference_papers = filter_publications_by_year(conference_papers, year_filter)
-        other_publications = filter_publications_by_year(other_publications, year_filter)
+    journal_articles = filter_publications_by_period(journal_articles, period)
+    conference_papers = filter_publications_by_period(conference_papers, period)
+    other_publications = filter_publications_by_period(other_publications, period)
 
     # Optional DOI enrichment
     if args.enrich:

@@ -338,27 +338,27 @@ def test_cli_generates_data_section(monkeypatch, tmp_path, cached_orcid):
     assert "Texas A" in content  # Employment data
 
 
-def test_cli_year_filter_for_publications(monkeypatch, tmp_path, cached_orcid, capsys):
-    """Test year filtering for publications section."""
+def test_cli_period_filter_for_publications(monkeypatch, tmp_path, cached_orcid, capsys):
+    """Test period filtering for publications section."""
     output_dir = tmp_path / "output"
     monkeypatch.setattr(sys, "argv", [
         "run_latex.py",
         "--orcid", "0000-0001-2345-6789",
         "--output-dir", str(output_dir),
         "--data-dir", str(cached_orcid),
-        "--year", "2024-2024",
+        "--cal_year", "2024",
         "--no-fetch"
     ])
 
     cli.main()
 
     captured = capsys.readouterr()
-    assert "Year filter: 2024-2024" in captured.err
-    assert "after year filter" in captured.err
+    assert "Period: CY 2024" in captured.err
+    assert "in CY 2024" in captured.err
 
 
-def test_cli_year_filter_ignored_for_data(monkeypatch, tmp_path, cached_orcid, capsys):
-    """Test that year filter is ignored for data section."""
+def test_cli_period_ignored_for_data(monkeypatch, tmp_path, cached_orcid, capsys):
+    """Test that the period is ignored for data section."""
     output_dir = tmp_path / "output"
     monkeypatch.setattr(sys, "argv", [
         "run_latex.py",
@@ -373,7 +373,7 @@ def test_cli_year_filter_ignored_for_data(monkeypatch, tmp_path, cached_orcid, c
     cli.main()
 
     captured = capsys.readouterr()
-    assert "--year is ignored for --section data" in captured.err
+    assert "the period is ignored for --section data" in captured.err
 
 
 def test_cli_skips_file_creation_when_no_data(monkeypatch, tmp_path, empty_record):
@@ -464,8 +464,8 @@ def test_cli_logs_to_stderr(monkeypatch, tmp_path, cached_orcid, capsys):
 # ── Error Handling ────────────────────────────────────────────────────────
 
 
-def test_cli_handles_invalid_year_format_gracefully(monkeypatch, tmp_path, cached_orcid, capsys):
-    """Test that invalid year format is handled gracefully (warning, no crash)."""
+def test_cli_rejects_invalid_period(monkeypatch, tmp_path, cached_orcid, capsys):
+    """A malformed period fails fast (exit 1) instead of silently reporting all years."""
     output_dir = tmp_path / "output"
 
     monkeypatch.setattr(sys, "argv", [
@@ -477,10 +477,13 @@ def test_cli_handles_invalid_year_format_gracefully(monkeypatch, tmp_path, cache
         "--no-fetch"
     ])
 
-    cli.main()  # Should not crash
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 1
 
     captured = capsys.readouterr()
-    assert "Invalid year" in captured.err
+    assert "--year must be YYYY" in captured.err
+    assert not output_dir.exists()
 
 
 # ── Direct ORCID ID Usage ─────────────────────────────────────────────────

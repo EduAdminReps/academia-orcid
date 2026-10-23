@@ -366,20 +366,22 @@ class TestBibtexPipeline:
         result = export_bibtex("0000-0001-0000-0000", [], [], [])
         assert result == ""
 
-    def test_year_filter_applied(self, sample_record):
-        """Year filter works with BibTeX export pipeline."""
+    def test_period_filter_applied(self, sample_record):
+        """The period filter works with BibTeX export pipeline."""
         from academia_orcid.extract import (
             extract_publications,
-            filter_publications_by_year,
+            filter_publications_by_period,
         )
         from academia_orcid.bibtex_export import export_bibtex
+        from academia_orcid.periods import period_from_flag
 
         journal, conf, other = extract_publications(sample_record)
 
-        # Filter to 2024 only (should keep journal article, exclude 2023 and 2022)
-        journal = filter_publications_by_year(journal, (2024, 2024))
-        conf = filter_publications_by_year(conf, (2024, 2024))
-        other = filter_publications_by_year(other, (2024, 2024))
+        # Calendar 2024 only (should keep journal article, exclude 2023 and 2022)
+        period = period_from_flag("cal_year", "2024")
+        journal = filter_publications_by_period(journal, period)
+        conf = filter_publications_by_period(conf, period)
+        other = filter_publications_by_period(other, period)
 
         result = export_bibtex("0000-0001-2345-6789", journal, conf, other)
         assert "% Entries: 1 total" in result

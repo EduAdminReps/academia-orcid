@@ -122,11 +122,36 @@ def test_full_latex_pipeline_data_section(monkeypatch, integration_setup):
     assert "MIT" in content  # Education
 
 
-# ── Year Filtering End-to-End ─────────────────────────────────────────────
+# ── Period Filtering End-to-End ───────────────────────────────────────────
 
 
-def test_integration_year_filter_single_year(monkeypatch, integration_setup, capsys):
-    """Test year filtering with single year."""
+def test_integration_period_single_calendar_year(monkeypatch, integration_setup, capsys):
+    """One calendar year keeps only that year's publications."""
+    setup = integration_setup
+
+    monkeypatch.setattr(sys, "argv", [
+        "run_latex.py",
+        "--orcid", setup["orcid"],
+        "--output-dir", str(setup["output_dir"]),
+        "--data-dir", str(setup["data_dir"]),
+        "--cal_year", "2024",
+        "--no-fetch"
+    ])
+
+    cli.main()
+
+    output_file = setup["output_dir"] / "orcid-publications.tex"
+    assert output_file.exists()
+
+    content = output_file.read_text()
+    assert "A Journal Paper" in content  # 2024
+    assert "A Conference Paper" not in content  # 2023
+    captured = capsys.readouterr()
+    assert "Period: CY 2024" in captured.err
+
+
+def test_integration_period_fiscal_year(monkeypatch, integration_setup):
+    """--year is a fiscal year (Fall 2023 + Spring 2024): calendar 2023 and 2024 overlap it."""
     setup = integration_setup
 
     monkeypatch.setattr(sys, "argv", [
@@ -140,18 +165,14 @@ def test_integration_year_filter_single_year(monkeypatch, integration_setup, cap
 
     cli.main()
 
-    output_file = setup["output_dir"] / "orcid-publications.tex"
-    assert output_file.exists()
-
-    content = output_file.read_text()
+    content = (setup["output_dir"] / "orcid-publications.tex").read_text()
     assert "A Journal Paper" in content  # 2024
-    # Other years should be filtered out
-    captured = capsys.readouterr()
-    assert "Year filter: 2024-2024" in captured.err
+    assert "A Conference Paper" in content  # 2023
+    assert "A Book Chapter" not in content  # 2022
 
 
-def test_integration_year_filter_range(monkeypatch, integration_setup):
-    """Test year filtering with range."""
+def test_integration_period_range(monkeypatch, integration_setup):
+    """A calendar-year range."""
     setup = integration_setup
 
     monkeypatch.setattr(sys, "argv", [
@@ -159,7 +180,7 @@ def test_integration_year_filter_range(monkeypatch, integration_setup):
         "--orcid", setup["orcid"],
         "--output-dir", str(setup["output_dir"]),
         "--data-dir", str(setup["data_dir"]),
-        "--year", "2023-2024",
+        "--cal_year", "2023-2024",
         "--no-fetch"
     ])
 
@@ -168,14 +189,13 @@ def test_integration_year_filter_range(monkeypatch, integration_setup):
     output_file = setup["output_dir"] / "orcid-publications.tex"
     content = output_file.read_text()
 
-    # 2024 and 2023 should be included
     assert "A Journal Paper" in content  # 2024
     assert "A Conference Paper" in content  # 2023
-    # 2022 should be filtered out
+    assert "A Book Chapter" not in content  # 2022
 
 
-def test_integration_year_filter_all(monkeypatch, integration_setup):
-    """Test year filter 'all' includes everything."""
+def test_integration_period_all(monkeypatch, integration_setup):
+    """'all' includes everything."""
     setup = integration_setup
 
     monkeypatch.setattr(sys, "argv", [

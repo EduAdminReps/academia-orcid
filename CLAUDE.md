@@ -116,8 +116,8 @@ python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/en.db -
 python run_json.py --uin <uin> --output-dir ./out --mapping-db /path/to/en.db
 # Produces: ./out/orcid-publications.json
 
-# With year filter (publications only)
-python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/en.db --year 2024-2025
+# With a period (publications only): calendar years 2024 through 2025
+python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/en.db --cal_year 2024-2025
 
 # Using ORCID ID directly (bypasses UIN→ORCID mapping)
 python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out
@@ -126,7 +126,7 @@ python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out
 python run_latex.py --uin <uin> --output-dir ./out --mapping-db /path/to/en.db --force-fetch
 
 # All options
-python run_latex.py [--uin <uin> --mapping-db <path> | --orcid <orcid>] --output-dir <path> [--data-dir <path>] [--section {publications,data}] [--year <year>] [--fetch | --no-fetch | --force-fetch]
+python run_latex.py [--uin <uin> --mapping-db <path> | --orcid <orcid>] --output-dir <path> [--data-dir <path>] [--section {publications,data}] [--year | --acad_year | --cal_year | --semester <value>] [--fetch | --no-fetch | --force-fetch]
 ```
 
 ### Options
@@ -138,21 +138,24 @@ python run_latex.py [--uin <uin> --mapping-db <path> | --orcid <orcid>] --output
 | `--output-dir` | Yes | — | Output directory for .tex/.json files |
 | `--data-dir` | No | `.` | Base directory containing ORCID data |
 | `--section` | No | `publications` | Section type: `publications` or `data` |
-| `--year` | No | — | Year filter for publications (ignored for data section) |
+| `--year` / `--acad_year` / `--cal_year` / `--semester` | No | all years | Report period for publications (ignored for data section); one of the four |
 | `--fetch` | No | Yes | Fetch ORCID record from API if not in cache (default behavior) |
 | `--no-fetch` | No | — | Only use cached records, do not fetch from API |
 | `--force-fetch` | No | — | Always fetch from API, even if cached record exists (refreshes cache) |
 | `--mapping-db` | Yes** | — | Path to SQLite database with `orcid_mapping` table (**required when using `--uin`) |
 
-**Year Format:**
-- `YYYY-YYYY`: Year range (e.g., `2020-2025`)
-- `YYYY`: Single year (e.g., `2024`, treated as `2024-2024`)
-- `all`: Include all available data (no filtering)
-- Omitted: Same as `all`
+**Period flags** (`academia_orcid.periods`, a verbatim copy of coe-data-core's
+`coe_core.periods`, written by its `just vendor-set`; never edit it here):
+- `--year Y`: fiscal year, Fall Y−1 + Spring Y. **`--year 2024` is no longer calendar 2024.**
+- `--acad_year Y`: Fall Y−1 + Spring Y + Summer Y.
+- `--cal_year Y`: Spring + Summer + Fall Y.
+- `--semester YYYYSC`: one term (e.g. `202431`).
+- Forms: `2024`, `2020-2025` (range), `2020+` (open-ended), `all`; for `--semester`, `202431`, `202331-202521`, `202331+`, `all`.
+- No flag: all years. A malformed value exits 1 with a message.
 
-**Year Filter Behavior:**
-- **`--section publications`**: Filters publications by publication year. Only works with years in the specified range are included.
-- **`--section data`**: The `--year` parameter is **ignored**. All employment, education, membership, etc. data is always included regardless of dates.
+**Filter Behavior:**
+- **`--section publications`**: a publication's year is a calendar year; it is kept when that year overlaps the period (so `--year 2024` keeps 2023 and 2024 publications). Publications with no or an unparseable year are kept.
+- **`--section data`**: The period is **ignored**. All employment, education, membership, etc. data is always included regardless of dates.
 
 ## Section: Publications
 
@@ -222,7 +225,7 @@ The standalone tool accepts only `--orcid` as input — university-specific UIN 
 ```bash
 # LaTeX/PDF (default)
 python tools/compose_cv.py --orcid 0000-0002-2983-9884
-python tools/compose_cv.py --orcid 0000-0002-2983-9884 --year 2020-2025
+python tools/compose_cv.py --orcid 0000-0002-2983-9884 --cal_year 2020-2025
 python tools/compose_cv.py --orcid 0000-0002-2983-9884 --skip-compile
 
 # DOCX
@@ -274,4 +277,4 @@ The standalone CV tools (`tools/`) are **independent** of the section-provider i
 - LaTeX special characters escaped automatically
 - **Non-Latin character stripping (LaTeX output only):** `escape_latex()` and `escape_latex_smart()` strip characters outside the Latin-1 range (U+0000–U+00FF). Accented Latin characters (é, ñ, ü) are kept — pdflatex handles them with `inputenc` + `lmodern`. CJK, Arabic, and other non-Latin scripts are silently removed because pdflatex cannot render them without specialized packages. This only affects LaTeX/PDF output; JSON and DOCX preserve all Unicode.
 - DOI links preserved and formatted as hyperlinks
-- Year filtering supported via `--year` flag (range, single year, or `all`)
+- Period filtering via the shared flags `--year` (fiscal), `--acad_year`, `--cal_year`, `--semester` (see Options)

@@ -2,7 +2,8 @@
 """CLI entry point for ORCID JSON export.
 
 Parallel to run_latex.py (LaTeX), this outputs structured JSON for the
-agentic pipeline. Same CLI contract: --uin, --output-dir, --section, --year.
+agentic pipeline. Same CLI contract: --uin, --output-dir, --section, and the
+period flags (--year, --acad_year, --cal_year, --semester; academia_orcid.periods).
 
 Output:
     {output-dir}/orcid-data.json         (--section data)
@@ -34,12 +35,12 @@ from academia_orcid.extract import (
     extract_memberships,
     extract_publications,
     extract_services,
-    filter_publications_by_year,
-    parse_year_filter,
+    filter_publications_by_period,
 )
-from academia_orcid.cli import validate_uin
+from academia_orcid.cli import resolve_period, validate_uin
 from academia_orcid.fetch import OrcidFetchError, get_or_fetch_orcid_record, get_orcid_for_uin, validate_orcid_id
 from academia_orcid.json_export import export_data, export_publications
+from academia_orcid.periods import add_period_args
 
 
 def main():
@@ -57,10 +58,7 @@ def main():
         choices=VALID_SECTIONS,
         help="Section to export: publications or data",
     )
-    parser.add_argument(
-        "--year", default=None,
-        help="Year filter (YYYY-YYYY, YYYY, or 'all'). Ignored for --section data.",
-    )
+    add_period_args(parser)  # publications only; ignored for --section data
     fetch_group = parser.add_mutually_exclusive_group()
     fetch_group.add_argument("--fetch", dest="fetch", action="store_true", default=True,
                              help="Fetch from ORCID API if not cached (default)")
@@ -105,7 +103,7 @@ def main():
     data_path = Path(args.data_dir)
     output_path = Path(args.output_dir)
     section = args.section
-    year_filter = parse_year_filter(args.year) if section == SECTION_PUBLICATIONS else None
+    period = resolve_period(args)
 
     # Determine output filename
     if section == SECTION_PUBLICATIONS:
@@ -163,10 +161,9 @@ def main():
     if section == SECTION_PUBLICATIONS:
         journal_articles, conference_papers, other_publications = extract_publications(record)
 
-        if year_filter:
-            journal_articles = filter_publications_by_year(journal_articles, year_filter)
-            conference_papers = filter_publications_by_year(conference_papers, year_filter)
-            other_publications = filter_publications_by_year(other_publications, year_filter)
+        journal_articles = filter_publications_by_period(journal_articles, period)
+        conference_papers = filter_publications_by_period(conference_papers, period)
+        other_publications = filter_publications_by_period(other_publications, period)
 
         data = export_publications(orcid_id, journal_articles, conference_papers, other_publications)
     else:

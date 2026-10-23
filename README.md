@@ -22,7 +22,7 @@ python tools/compose_cv.py --orcid 0000-0002-2983-9884 --format bibtex
 python tools/compose_cv.py --orcid 0000-0002-2983-9884 --format bibtex --enrich
 
 # Filter publications by year
-python tools/compose_cv.py --orcid 0000-0002-2983-9884 --year 2020-2025
+python tools/compose_cv.py --orcid 0000-0002-2983-9884 --cal_year 2020-2025
 
 # LaTeX source only (no compilation)
 python tools/compose_cv.py --orcid 0000-0002-2983-9884 --skip-compile
@@ -50,7 +50,7 @@ python run_json.py --orcid 0000-0002-2983-9884 --output-dir ./out
 python run_latex.py --uin 123456789 --output-dir ./out --mapping-db /path/to/en.db
 
 # Year filter
-python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out --year 2020-2025
+python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out --cal_year 2020-2025
 ```
 
 ## Project Structure
@@ -86,7 +86,7 @@ academia-orcid/
 | `--orcid` | Yes* | — | ORCID ID directly |
 | `--output-dir` | Yes | — | Output directory for .tex/.json files |
 | `--section` | No | `publications` | Section type: `publications` or `data` |
-| `--year` | No | — | Year filter (ignored for data section) |
+| `--year` / `--acad_year` / `--cal_year` / `--semester` | No | all years | Report period for publications (ignored for data section). `--year` is a fiscal year (Fall Y−1 + Spring Y); forms `2024`, `2020-2025`, `2020+`, `all` |
 | `--fetch` / `--no-fetch` / `--force-fetch` | No | `--fetch` | ORCID API fetch control |
 | `--mapping-db` | Yes** | — | SQLite database with `orcid_mapping` table (**required with `--uin`) |
 
