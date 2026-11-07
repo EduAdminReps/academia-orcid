@@ -53,6 +53,22 @@ python run_latex.py --uin 123456789 --output-dir ./out --mapping-db /path/to/en.
 python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out --cal_year 2020-2025
 ```
 
+## Bulk Cache Fill
+
+Download every mapped faculty member's ORCID record into `ORCID_JSON/` ahead of
+time, so report runs can pass `--no-fetch` and never wait on the API:
+
+```bash
+just prefetch                          # missing or stale (> 7 days) records
+just prefetch --dry-run                # list what would be downloaded
+just prefetch --force                  # refresh everything
+just prefetch --dept MEEN              # current faculty of one department (repeatable)
+just prefetch --uin 123456789          # one person (repeatable); or --uin-file PATH
+```
+
+Fresh records are skipped, so an interrupted run can be rerun to resume. Exit
+code 1 means at least one record failed to download (the rest are kept).
+
 ## Project Structure
 
 ```
@@ -60,6 +76,7 @@ academia-orcid/
 ├── src/academia_orcid/             # Installable Python package
 │   ├── cli.py                      # Section-provider entry point
 │   ├── fetch.py                    # ORCID API client and caching
+│   ├── prefetch.py                 # Bulk cache fill for every mapped ORCID
 │   ├── extract.py                  # Data extraction from ORCID records
 │   ├── latex.py                    # LaTeX generation
 │   ├── json_export.py              # JSON export
@@ -75,6 +92,7 @@ academia-orcid/
 ├── run_latex.py                    # Composer entry point (LaTeX)
 ├── run_json.py                     # Composer entry point (JSON)
 ├── run_bibtex.py                   # Composer entry point (BibTeX)
+├── run_prefetch.py                 # Bulk cache fill (wrapper for prefetch.py)
 └── pyproject.toml
 ```
 

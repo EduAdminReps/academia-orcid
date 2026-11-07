@@ -42,6 +42,7 @@ academia-orcid/
 │       ├── enrich.py             # DOI content negotiation enrichment (opt-in)
 │       ├── normalize.py          # Text normalization (HTML, LaTeX, Unicode)
 │       ├── fetch.py              # ORCID API client, caching, UIN mapping
+│       ├── prefetch.py           # Bulk cache fill for every mapped ORCID (run_prefetch.py)
 │       ├── config.py             # YAML configuration management (optional pyyaml)
 │       ├── logging_config.py     # Logging setup and module logger factory
 │       └── schema.py             # TypedDict definitions for ORCID JSON
@@ -60,6 +61,8 @@ academia-orcid/
 ├── run_latex.py                  # Thin wrapper for composer compatibility (LaTeX)
 ├── run_json.py                   # Thin wrapper for composer compatibility (JSON)
 ├── run_bibtex.py                 # Thin wrapper for composer compatibility (BibTeX)
+├── run_prefetch.py               # Bulk cache fill (thin wrapper for academia_orcid.prefetch)
+├── justfile                      # `just prefetch` — the one way to fill ORCID_JSON/
 ├── pyproject.toml                # Package configuration (src layout)
 └── .gitignore
 ```
@@ -83,6 +86,7 @@ Schema documentation: [src/academia_orcid/schema.py](src/academia_orcid/schema.p
 |--------|---------|
 | `academia_orcid.cli` | `main()` entry point — argparse, orchestration |
 | `academia_orcid.fetch` | ORCID API client, JSON cache loading, UIN→ORCID mapping |
+| `academia_orcid.prefetch` | Bulk cache fill: every ORCID in `orcid_mapping` → `ORCID_JSON/` |
 | `academia_orcid.extract` | Publication/data extraction, year filtering |
 | `academia_orcid.latex` | LaTeX generation (`escape_latex`, `generate_latex`, `generate_data_latex`) |
 | `academia_orcid.json_export` | JSON export (`export_publications`, `export_data`) |
@@ -100,6 +104,33 @@ Schema documentation: [src/academia_orcid/schema.py](src/academia_orcid/schema.p
 | `run_latex.py` | **Composer entry point** — thin wrapper calling `academia_orcid.cli.main()` |
 | `run_json.py` | **Composer entry point** — JSON export for YAML/Word pipelines |
 | `run_bibtex.py` | **Composer entry point** — BibTeX export for publications |
+| `run_prefetch.py` | Bulk cache fill — downloads every mapped ORCID record (see Bulk Cache Fill) |
+
+## Bulk Cache Fill
+
+`run_latex.py`/`run_json.py` fetch one record on demand, and treat a cached
+record older than the TTL (7 days) as stale. `just prefetch` fills
+`ORCID_JSON/` for every ORCID in `orcid_mapping` ahead of time, so the composer
+can run with `--no-fetch` and make no live API calls. **This repo owns its
+cache:** `tamu-coe-faculty-profiles` and `academia-openalex` call this recipe
+(`just prefetch` in each) rather than fetching on their own.
+
+```bash
+just prefetch                          # missing or stale records (en.db: $COE_DATA_DB or ../coe-data-db/en.db)
+just prefetch --dry-run                # report only
+just prefetch --force                  # refresh everything
+just prefetch --dept MEEN              # current faculty of a department (latest faculty_census term; repeatable)
+just prefetch --uin 123456789          # one person (repeatable)
+just prefetch --uin-file nominees.txt  # one UIN per line (# comments ok), or a CSV with a UIN column
+```
+
+The scope options combine as a union; a scope that matches nobody fetches
+nothing (never "everyone"), and an unknown department is an error.
+
+- Fresh records are skipped; each record is written whole, so an interrupted run resumes on rerun.
+- One person at a time (`--delay`, default 0.2 s between people); works within a person use the existing concurrent fetch.
+- Per-person outcome on stderr, then a summary (`fetched`, `fresh`, `failed`, `invalid`). Exit 1 if any fetch failed.
+- Rough cost: ~6 works/s, so ~290 COE ORCIDs take about an hour.
 
 ## CLI Interface
 
