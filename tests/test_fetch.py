@@ -22,21 +22,23 @@ from academia_orcid.fetch import (
 
 @pytest.fixture
 def tmp_mapping_db(tmp_path):
-    """Temp SQLite database with orcid_mapping table."""
+    """Temp SQLite database with en.db's faculty_identifiers table."""
     db_path = tmp_path / "shared.db"
     conn = sqlite3.connect(db_path)
     conn.execute("""
-        CREATE TABLE orcid_mapping (
-            UIN TEXT NOT NULL, ORCID TEXT, ScholarsURI TEXT
+        CREATE TABLE faculty_identifiers (
+            UIN TEXT NOT NULL, Scheme TEXT NOT NULL, Identifier TEXT NOT NULL,
+            Rank INTEGER NOT NULL
         )
     """)
-    conn.execute(
-        "INSERT INTO orcid_mapping VALUES (?, ?, ?)",
-        ("123456789", "0000-0001-2345-6789", "https://scholars.library.tamu.edu/test"),
-    )
-    conn.execute(
-        "INSERT INTO orcid_mapping VALUES (?, ?, ?)",
-        ("999000000", None, None),
+    conn.executemany(
+        "INSERT INTO faculty_identifiers VALUES (?, ?, ?, 1)",
+        [
+            ("123456789", "orcid", "0000-0001-2345-6789"),
+            ("123456789", "scholars_tamu", "n0000001"),
+            # Identifiers, but no ORCID iD.
+            ("999000000", "scholars_tamu", "n0000002"),
+        ],
     )
     conn.commit()
     conn.close()
@@ -53,7 +55,7 @@ def test_get_orcid_for_uin_not_found(tmp_mapping_db):
     assert result is None
 
 
-def test_get_orcid_for_uin_null_orcid(tmp_mapping_db):
+def test_get_orcid_for_uin_no_orcid_row(tmp_mapping_db):
     result = get_orcid_for_uin(tmp_mapping_db, "999000000")
     assert result is None
 

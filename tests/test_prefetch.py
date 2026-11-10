@@ -16,10 +16,17 @@ TTL = 7 * 24 * 60 * 60
 
 
 def _db(tmp_path, rows):
+    """en.db's faculty_identifiers, from (UIN, ORCID) pairs; each person also gets a
+    Scholars@TAMU row, which load_mapped_orcids must ignore."""
     path = tmp_path / "en.db"
     conn = sqlite3.connect(path)
-    conn.execute("CREATE TABLE orcid_mapping (UIN TEXT, ORCID TEXT, ScholarsURI TEXT)")
-    conn.executemany("INSERT INTO orcid_mapping VALUES (?, ?, ?)", rows)
+    conn.execute(
+        "CREATE TABLE faculty_identifiers (UIN TEXT, Scheme TEXT, Identifier TEXT, Rank INTEGER)"
+    )
+    conn.executemany("INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, 1)",
+                     [(uin, orcid) for uin, orcid in rows if orcid is not None])
+    conn.executemany("INSERT INTO faculty_identifiers VALUES (?, 'scholars_tamu', ?, 1)",
+                     [(uin, f"n{uin}") for uin, _ in rows])
     conn.commit()
     conn.close()
     return path
@@ -35,11 +42,11 @@ def _cache(data_dir, orcid, metadata):
 class TestLoadMappedOrcids:
     def test_skips_blank_and_dedupes(self, tmp_path):
         db = _db(tmp_path, [
-            ("222222222", "0000-0002-0000-0002", ""),
-            ("111111111", " 0000-0001-0000-0001 ", ""),
-            ("333333333", "", ""),
-            ("444444444", None, ""),
-            ("555555555", "0000-0001-0000-0001", ""),  # same ORCID as 111111111
+            ("222222222", "0000-0002-0000-0002"),
+            ("111111111", " 0000-0001-0000-0001 "),
+            ("333333333", ""),
+            ("444444444", None),
+            ("555555555", "0000-0001-0000-0001"),  # same ORCID as 111111111
         ])
         assert pf.load_mapped_orcids(db) == [
             ("111111111", "0000-0001-0000-0001"),
@@ -48,8 +55,8 @@ class TestLoadMappedOrcids:
 
     def test_uin_filter(self, tmp_path):
         db = _db(tmp_path, [
-            ("111111111", "0000-0001-0000-0001", ""),
-            ("222222222", "0000-0002-0000-0002", ""),
+            ("111111111", "0000-0001-0000-0001"),
+            ("222222222", "0000-0002-0000-0002"),
         ])
         assert pf.load_mapped_orcids(db, ["222222222"]) == [("222222222", "0000-0002-0000-0002")]
 
@@ -111,7 +118,7 @@ class TestPrefetch:
 
 class TestMain:
     def test_exit_code_reflects_failures(self, tmp_path, monkeypatch):
-        db = _db(tmp_path, [("111111111", "0000-0001-0000-9999", "")])
+        db = _db(tmp_path, [("111111111", "0000-0001-0000-9999")])
 
         def boom(orcid, data_dir, dept=None):
             raise OrcidFetchError("HTTP 503")
@@ -120,7 +127,7 @@ class TestMain:
         assert pf.main(["--mapping-db", str(db), "--data-dir", str(tmp_path)]) == 1
 
     def test_dry_run_exits_zero(self, tmp_path):
-        db = _db(tmp_path, [("111111111", "0000-0001-0000-0001", "")])
+        db = _db(tmp_path, [("111111111", "0000-0001-0000-0001")])
         args = ["--mapping-db", str(db), "--data-dir", str(tmp_path), "--dry-run"]
         assert pf.main(args) == 0
 
@@ -128,7 +135,7 @@ class TestMain:
         assert pf.main(["--mapping-db", str(tmp_path / "nope.db")]) == 1
 
     def test_unknown_department_fails(self, tmp_path):
-        db = _db(tmp_path, [("111111111", "0000-0001-0000-0001", "")])
+        db = _db(tmp_path, [("111111111", "0000-0001-0000-0001")])
         _census(db, [("202631", "111111111", "MEEN")])
         args = ["--mapping-db", str(db), "--data-dir", str(tmp_path), "--dept", "XXXX", "--dry-run"]
         assert pf.main(args) == 1
@@ -169,6 +176,6 @@ class TestScope:
         assert pf.selected_uins(db, ["111111111"], f, ["ECEN"]) == ["111111111", "222222222", "333333333"]
 
     def test_empty_scope_selects_nobody(self, tmp_path):
-        db = _db(tmp_path, [("111111111", "0000-0001-0000-0001", "")])
+        db = _db(tmp_path, [("111111111", "0000-0001-0000-0001")])
         assert pf.load_mapped_orcids(db, []) == []
         assert pf.load_mapped_orcids(db, None) == [("111111111", "0000-0001-0000-0001")]

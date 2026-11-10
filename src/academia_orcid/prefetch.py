@@ -2,7 +2,7 @@
 
 The section entry points (run_latex.py, run_json.py) fetch one record on
 demand. This command fills the cache ahead of time for every ORCID iD in the
-``orcid_mapping`` table, so report runs can pass ``--no-fetch`` and never wait
+``faculty_identifiers`` table, so report runs can pass ``--no-fetch`` and never wait
 on the ORCID API.
 
 A record is downloaded when it is missing, unreadable, or older than the cache
@@ -32,6 +32,8 @@ from pathlib import Path
 
 from .config import get_config
 from .fetch import (
+    IDENTIFIERS_TABLE,
+    ORCID_SCHEME,
     OrcidFetchError,
     fetch_orcid_record,
     is_cache_fresh,
@@ -44,16 +46,17 @@ logger = logging.getLogger("academia_orcid.prefetch")
 
 
 def load_mapped_orcids(db_path: Path, uins: list[str] | None = None) -> list[tuple[str, str]]:
-    """Return (UIN, ORCID) pairs from ``orcid_mapping``, one per distinct ORCID.
+    """Return (UIN, ORCID) pairs from ``faculty_identifiers``, one per distinct ORCID.
 
-    Rows with a blank ORCID are skipped. ``uins`` restricts the result to those
-    UINs. Pairs come back sorted by UIN.
+    Only Scheme 'orcid' rows; a blank ORCID is skipped. ``uins`` restricts the
+    result to those UINs. Pairs come back sorted by UIN.
     """
     conn = sqlite3.connect(f"{Path(db_path).resolve().as_uri()}?mode=ro", uri=True)
     try:
         rows = conn.execute(
-            "SELECT UIN, TRIM(ORCID) FROM orcid_mapping "
-            "WHERE ORCID IS NOT NULL AND TRIM(ORCID) != '' ORDER BY UIN"
+            f"SELECT UIN, TRIM(Identifier) FROM {IDENTIFIERS_TABLE} "
+            "WHERE Scheme = ? AND TRIM(Identifier) != '' ORDER BY UIN",
+            (ORCID_SCHEME,),
         ).fetchall()
     finally:
         conn.close()
@@ -209,7 +212,7 @@ def main(argv: list[str] | None = None, default_data_dir: Path | None = None) ->
         description="Download every mapped ORCID record into the local cache."
     )
     parser.add_argument("--mapping-db", required=True,
-                        help="SQLite database with the orcid_mapping table (UIN, ORCID)")
+                        help="SQLite database with the faculty_identifiers table (en.db)")
     parser.add_argument("--data-dir", default=str(default_data_dir or "."),
                         help="Base directory holding ORCID_JSON/ (default: repo root)")
     parser.add_argument("--uin", action="append", default=None,

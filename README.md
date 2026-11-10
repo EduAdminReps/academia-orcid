@@ -106,7 +106,7 @@ academia-orcid/
 | `--section` | No | `publications` | Section type: `publications` or `data` |
 | `--year` / `--acad_year` / `--cal_year` / `--semester` | No | all years | Report period for publications (ignored for data section). `--year` is a fiscal year (Fall Y−1 + Spring Y); forms `2024`, `2020-2025`, `2020+`, `all` |
 | `--fetch` / `--no-fetch` / `--force-fetch` | No | `--fetch` | ORCID API fetch control |
-| `--mapping-db` | Yes** | — | SQLite database with `orcid_mapping` table (**required with `--uin`) |
+| `--mapping-db` | Yes** | — | SQLite database (en.db) with the `faculty_identifiers` table (**required with `--uin`) |
 
 ## Dependencies
 

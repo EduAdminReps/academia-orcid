@@ -75,7 +75,7 @@ Schema documentation: [src/academia_orcid/schema.py](src/academia_orcid/schema.p
 
 ### Data Flow
 
-1. Faculty UIN → ORCID mapping loaded from SQLite (table `orcid_mapping`) via `--mapping-db` (required when using `--uin`)
+1. Faculty UIN → ORCID looked up in SQLite (en.db's `faculty_identifiers`, Scheme `orcid`) via `--mapping-db` (required when using `--uin`)
 2. ORCID records cached in `ORCID_JSON/{orcid}.json` (fetched via `--fetch`/`--force-fetch` flags)
 3. `run_latex.py` (thin wrapper) → `academia_orcid.cli.main()` extracts data and generates LaTeX output
 4. `run_json.py` (thin wrapper) → exports structured JSON for YAML/Word pipelines
@@ -86,7 +86,7 @@ Schema documentation: [src/academia_orcid/schema.py](src/academia_orcid/schema.p
 |--------|---------|
 | `academia_orcid.cli` | `main()` entry point — argparse, orchestration |
 | `academia_orcid.fetch` | ORCID API client, JSON cache loading, UIN→ORCID mapping |
-| `academia_orcid.prefetch` | Bulk cache fill: every ORCID in `orcid_mapping` → `ORCID_JSON/` |
+| `academia_orcid.prefetch` | Bulk cache fill: every ORCID in `faculty_identifiers` → `ORCID_JSON/` |
 | `academia_orcid.extract` | Publication/data extraction, year filtering |
 | `academia_orcid.latex` | LaTeX generation (`escape_latex`, `generate_latex`, `generate_data_latex`) |
 | `academia_orcid.json_export` | JSON export (`export_publications`, `export_data`) |
@@ -110,7 +110,7 @@ Schema documentation: [src/academia_orcid/schema.py](src/academia_orcid/schema.p
 
 `run_latex.py`/`run_json.py` fetch one record on demand, and treat a cached
 record older than the TTL (7 days) as stale. `just prefetch` fills
-`ORCID_JSON/` for every ORCID in `orcid_mapping` ahead of time, so the composer
+`ORCID_JSON/` for every ORCID in `faculty_identifiers` ahead of time, so the composer
 can run with `--no-fetch` and make no live API calls. **This repo owns its
 cache:** `tamu-coe-faculty-profiles` and `academia-openalex` call this recipe
 (`just prefetch` in each) rather than fetching on their own.
@@ -173,7 +173,7 @@ python run_latex.py [--uin <uin> --mapping-db <path> | --orcid <orcid>] --output
 | `--fetch` | No | Yes | Fetch ORCID record from API if not in cache (default behavior) |
 | `--no-fetch` | No | — | Only use cached records, do not fetch from API |
 | `--force-fetch` | No | — | Always fetch from API, even if cached record exists (refreshes cache) |
-| `--mapping-db` | Yes** | — | Path to SQLite database with `orcid_mapping` table (**required when using `--uin`) |
+| `--mapping-db` | Yes** | — | Path to SQLite database (en.db) with the `faculty_identifiers` table (**required when using `--uin`) |
 
 **Period flags** (`academia_orcid.periods`, a verbatim copy of coe-data-core's
 `coe_core.periods`, written by its `just vendor-set`; never edit it here):
@@ -219,13 +219,18 @@ Each subsection only appears if data exists.
 
 ## UIN → ORCID Mapping
 
-The package requires a SQLite database with an `orcid_mapping` table:
+The package reads en.db's `faculty_identifiers` table (built by coe-data-core; one
+row per identifier, for ORCID, Scholars@TAMU, Google Scholar and OpenAlex). It uses
+only the rows with Scheme `orcid`, at most one per person:
 
 | Column | Description |
 |--------|-------------|
 | `UIN` | Faculty identifier |
-| `ORCID` | ORCID ID (e.g., `0000-0002-2983-9884`) |
+| `Scheme` | `orcid` (other schemes are ignored) |
+| `Identifier` | ORCID ID (e.g., `0000-0002-2983-9884`) |
 
+The table name and scheme are `IDENTIFIERS_TABLE` / `ORCID_SCHEME` in `fetch.py`
+(this repo does not import coe-data-core). It replaced `orcid_mapping` (2026-11-09).
 The mapping database path is passed via `--mapping-db`. Alternatively, use `--orcid` to bypass the mapping entirely.
 
 ## Dependencies

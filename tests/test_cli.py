@@ -18,9 +18,14 @@ def mapping_db(tmp_path):
     """Create a test mapping database with UIN→ORCID mappings."""
     db_path = tmp_path / "shared.db"
     conn = sqlite3.connect(db_path)
-    conn.execute("CREATE TABLE orcid_mapping (UIN TEXT, ORCID TEXT)")
-    conn.execute("INSERT INTO orcid_mapping VALUES (?, ?)", ("123456789", "0000-0001-2345-6789"))
-    conn.execute("INSERT INTO orcid_mapping VALUES (?, ?)", ("999999999", None))
+    conn.execute(
+        "CREATE TABLE faculty_identifiers (UIN TEXT, Scheme TEXT, Identifier TEXT, Rank INTEGER)"
+    )
+    conn.execute("INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, 1)",
+                 ("123456789", "0000-0001-2345-6789"))
+    # 999999999 has identifiers, but no ORCID iD.
+    conn.execute("INSERT INTO faculty_identifiers VALUES (?, 'scholars_tamu', ?, 1)",
+                 ("999999999", "n0000001"))
     conn.commit()
     conn.close()
     return db_path

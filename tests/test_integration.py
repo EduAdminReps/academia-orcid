@@ -20,8 +20,11 @@ def integration_setup(tmp_path, sample_record):
     # Create mapping database
     db_path = tmp_path / "shared.db"
     conn = sqlite3.connect(db_path)
-    conn.execute("CREATE TABLE orcid_mapping (UIN TEXT, ORCID TEXT)")
-    conn.execute("INSERT INTO orcid_mapping VALUES (?, ?)", ("123456789", "0000-0001-2345-6789"))
+    conn.execute(
+        "CREATE TABLE faculty_identifiers (UIN TEXT, Scheme TEXT, Identifier TEXT, Rank INTEGER)"
+    )
+    conn.execute("INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, 1)",
+                 ("123456789", "0000-0001-2345-6789"))
     conn.commit()
     conn.close()
 
@@ -244,8 +247,11 @@ def test_integration_no_fetch_with_missing_cache(monkeypatch, tmp_path, capsys):
     """Test --no-fetch with missing cache creates placeholder."""
     db_path = tmp_path / "shared.db"
     conn = sqlite3.connect(db_path)
-    conn.execute("CREATE TABLE orcid_mapping (UIN TEXT, ORCID TEXT)")
-    conn.execute("INSERT INTO orcid_mapping VALUES (?, ?)", ("123456789", "0000-0001-2345-6789"))
+    conn.execute(
+        "CREATE TABLE faculty_identifiers (UIN TEXT, Scheme TEXT, Identifier TEXT, Rank INTEGER)"
+    )
+    conn.execute("INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, 1)",
+                 ("123456789", "0000-0001-2345-6789"))
     conn.commit()
     conn.close()
 

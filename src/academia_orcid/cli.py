@@ -113,7 +113,7 @@ def main():
     parser.add_argument(
         "--mapping-db",
         default=None,
-        help="Path to SQLite database with orcid_mapping table (required when using --uin)"
+        help="Path to SQLite database (en.db) with the faculty_identifiers table (required when using --uin)"
     )
     parser.add_argument(
         "--config",

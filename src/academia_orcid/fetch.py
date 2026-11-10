@@ -124,6 +124,12 @@ def add_cache_metadata(record: dict) -> dict:
     return record
 
 
+# en.db's identifiers table (built by coe-data-core): one row per identifier, so a
+# person's ORCID iD is their row with Scheme 'orcid' (at most one).
+IDENTIFIERS_TABLE = "faculty_identifiers"
+ORCID_SCHEME = "orcid"
+
+
 def get_orcid_for_uin(db_path: Path, uin: str) -> str | None:
     """Look up ORCID ID for a UIN from SQLite (en.db).
 
@@ -133,7 +139,8 @@ def get_orcid_for_uin(db_path: Path, uin: str) -> str | None:
     conn = sqlite3.connect(f"{Path(db_path).resolve().as_uri()}?mode=ro", uri=True)
     try:
         cur = conn.execute(
-            "SELECT ORCID FROM orcid_mapping WHERE UIN = ?", (uin,)
+            f"SELECT Identifier FROM {IDENTIFIERS_TABLE} WHERE UIN = ? AND Scheme = ?",
+            (uin, ORCID_SCHEME),
         )
         row = cur.fetchone()
         if row and row[0]:

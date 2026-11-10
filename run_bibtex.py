@@ -44,7 +44,7 @@ def main():
                              help="Only use cached records")
     fetch_group.add_argument("--force-fetch", action="store_true",
                              help="Always fetch from API (refresh cache)")
-    parser.add_argument("--mapping-db", default=None, help="Path to SQLite with orcid_mapping")
+    parser.add_argument("--mapping-db", default=None, help="Path to SQLite (en.db) with faculty_identifiers")
     parser.add_argument(
         "--enrich", action="store_true",
         help="Enrich publications via DOI content negotiation (fills gaps)",
