@@ -27,7 +27,7 @@ term is open, so a record with unknown dates matches every period.
 
 This module uses only the standard library and imports nothing from coe_core:
 tamu-coe-set, tamu-scholars and academia-orcid deploy on their own, so
-coe-data-core copies it verbatim into each of them (``just vendor``), and
+coe-data-core copies it verbatim into each of them (``just vendor-set``), and
 ``tests/test_vendored_drift.py`` fails if a copy differs. Change it here only.
 """
 
