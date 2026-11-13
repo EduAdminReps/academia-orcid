@@ -338,6 +338,30 @@ The standalone CV tools (`tools/`) are **independent** of the section-provider i
 
 - `pdflatex` (TeX Live or MacTeX) is required for PDF compilation. Use `--skip-compile` to generate LaTeX source without compiling.
 
+## Twin repository (tamu-scholars)
+
+`../tamu-scholars/` is this repo's twin for Scholars@TAMU: another source, the same
+section contract. Their shared code is of two kinds:
+
+- **Vendored** from coe-data-core (one source, drift-tested there): `periods.py`
+  and `latex_text.py`. Never edit them here; change coe-data-core and run its
+  `just vendor-set`.
+- **Hand-aligned copies** (owner, 2026-11-12: two copies for now, no drift test):
+  - `cli.py`: the common flags (`--uin`/`--orcid` exclusive, the fetch group),
+    `resolve_period`, the id lookup and `load_record`, the exit codes;
+  - `fetch.py`: the whole-file cache write, the en.db lookup (lowest Rank,
+    stripped), and the rule that a record with missing details is partial;
+  - `prefetch.py`: the scope options, outcome counts and exit code;
+  - `config.py` (validated after the environment overrides) and `logging_config.py`;
+  - `extract.py`: `filter_publications_by_period` and `collapse_duplicates`;
+  - the summary format (`Journal Articles: 12`), and the justfile recipes and
+    ruff/mypy settings.
+
+  A change to any of these is checked against the twin and made there too, unless
+  it is source-specific (ORCID work details vs Scholars documents and 404s). If a
+  fix again lands in one twin only, revisit: vendor the source-neutral parts from
+  coe-data-core like `latex_text.py`.
+
 ## Notes
 
 - ORCID API has rate limits — scripts implement delays and retries
