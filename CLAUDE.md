@@ -4,6 +4,29 @@
 
 This package fetches academic publication and employment data from ORCID (Open Researcher and Contributor ID) and generates LaTeX/JSON sections for faculty vita reports. It is institution-agnostic — any university can use it by providing a UIN→ORCID mapping database.
 
+## Direction: data procurement only (owner, 2026-11-13)
+
+Decided, not yet built. The plan and its order are in tamu-coe-faculty-profiles'
+CLAUDE.md ("Direction"). Nobody uses this repo on its own, and rendering from
+JSON is cheap now, so the composer renders and this repo supplies the data:
+
+- **Stays:** fetch, cache, prefetch, extract (DOIs, `self` vs `part-of`, name
+  order, duplicates: the source knowledge) and `run_json.py`, both sections.
+  The `orcid-data` JSON stays; the composer renders it.
+- **Goes:** `latex.py`, `run_latex.py` and the LaTeX path in `cli.py`; BibTeX
+  (`bibtex_export.py`, `run_bibtex.py`); `enrich.py` (academia-openalex gives
+  volume, issue and pages by DOI); the standalone CV tool (`tools/`); the vendored
+  `latex_text.py`.
+- **The JSON changes.** Titles keep ORCID's markup (the renderers handle it, so
+  `clean_for_plaintext` goes). Entries gain `author_names` (`[{family, given}]`,
+  from `split_name`). The preformatted `authors` string goes once the composer
+  renders names.
+- **Open:** whether the period filter stays here or moves to the composer.
+
+The Data Philosophy below holds: the faithfulness lives in extraction, not in
+rendering. Its BibTeX, enrichment and CV-tool paragraphs describe code that is
+going.
+
 ## Data Philosophy
 
 **ORCID as system of record.** Faculty are asked to maintain their ORCID profiles as a proxy for submitting annual CVs. All generated outputs (LaTeX/PDF, the JSON behind the composer's Word report, BibTeX) are faithful renderings of that record. If a report entry is questioned, the answer is always "this is what's in the faculty member's ORCID profile." This creates a clean accountability boundary — the faculty member owns the data, the tool renders it.
