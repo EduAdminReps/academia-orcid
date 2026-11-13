@@ -3,8 +3,11 @@
 Reuses extract.py functions (which already return plain dicts/lists)
 and wraps them in a standard JSON envelope with _meta section.
 
-Text fields are cleaned via normalize.clean_for_plaintext() to strip
-HTML markup and convert sub/superscripts to Unicode.
+Publication titles keep ORCID's markup (HTML tags, ``$...$`` math): the composer
+renders it for each format (owner, 2026-11-13). Entries carry ``author_names``
+(``[{family, given}]``) for the composer's author renderer, and still the
+preformatted ``authors`` string. The biography is cleaned for plain text
+(normalize.clean_for_plaintext), as before.
 
 Publications carry ``_meta.provenance``, with the same keys in academia-orcid,
 tamu-scholars and academia-openalex, so a consumer tells author-curated lists
@@ -19,14 +22,6 @@ from academia_orcid.normalize import clean_for_plaintext
 
 PROVENANCE_SOURCE = "orcid"
 CURATION = "author-curated"  # the faculty member maintains the ORCID record
-
-
-def _clean_pub(pub: dict) -> dict:
-    """Return a copy with the title cleaned for plain-text output."""
-    cleaned = dict(pub)
-    if cleaned.get("title"):
-        cleaned["title"] = clean_for_plaintext(cleaned["title"])
-    return cleaned
 
 
 def export_data(
@@ -130,7 +125,7 @@ def export_publications(
                 "fetched_at": fetched_at,
             },
         },
-        "journal_articles": [_clean_pub(p) for p in journal_articles],
-        "conference_papers": [_clean_pub(p) for p in conference_papers],
-        "other_publications": [_clean_pub(p) for p in other_publications],
+        "journal_articles": [dict(p) for p in journal_articles],
+        "conference_papers": [dict(p) for p in conference_papers],
+        "other_publications": [dict(p) for p in other_publications],
     }

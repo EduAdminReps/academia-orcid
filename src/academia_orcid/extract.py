@@ -115,6 +115,13 @@ def format_author(raw: str) -> str:
     return f"{family}, {initials}" if initials else family
 
 
+def _name_parts(raw: str) -> dict[str, str]:
+    """{"family", "given"} for one credit name (``split_name``): the structured
+    name the composer renders (``author_names``; owner, 2026-11-13)."""
+    family, given = split_name(raw)
+    return {"family": family, "given": given}
+
+
 def _title_key(pub: dict) -> str:
     """Title, lower-case, letters and digits only, for spotting the same work twice."""
     return re.sub(r"[^0-9a-z]+", "", re.sub(r"<[^>]+>", "", pub.get("title", "")).lower())
@@ -177,7 +184,9 @@ def extract_publications(record: dict, author_limit: int | None = None) -> tuple
         if work is None:
             continue
         try:
-            title = html.unescape(_value(_obj(work, "title"), "title")) or "Untitled"
+            # Markup kept for the composer; line breaks and indentation collapsed.
+            title = " ".join(html.unescape(_value(_obj(work, "title"), "title")).split())
+            title = title or "Untitled"
             date = _obj(work, "publication-date")
             author_names = [
                 html.unescape(_value(contributor, "credit-name"))
@@ -206,6 +215,7 @@ def extract_publications(record: dict, author_limit: int | None = None) -> tuple
                 {
                     "authors": ", ".join(formatted),
                     "raw_authors": author_names,
+                    "author_names": [_name_parts(name) for name in author_names],
                     "title": title,
                     "venue": venue,
                     "year": _value(date, "year"),

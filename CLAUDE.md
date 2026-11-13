@@ -17,10 +17,10 @@ JSON is cheap now, so the composer renders and this repo supplies the data:
   (`bibtex_export.py`, `run_bibtex.py`); `enrich.py` (academia-openalex gives
   volume, issue and pages by DOI); the standalone CV tool (`tools/`); the vendored
   `latex_text.py`.
-- **The JSON changes.** Titles keep ORCID's markup (the renderers handle it, so
-  `clean_for_plaintext` goes). Entries gain `author_names` (`[{family, given}]`,
-  from `split_name`). The preformatted `authors` string goes once the composer
-  renders names.
+- **The JSON (done 2026-11-13).** Titles keep ORCID's markup, whitespace collapsed
+  (the composer renders the markup); the biography is still cleaned for plain
+  text. Entries carry `author_names` (`[{family, given}]`, every credit name, by
+  `split_name`). The preformatted `authors` string goes in step 4.
 - **Open:** whether the period filter stays here or moves to the composer.
 
 The Data Philosophy below holds: the faithfulness lives in extraction, not in

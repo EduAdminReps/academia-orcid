@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from academia_orcid.json_export import _clean_pub, export_data, export_publications
+from academia_orcid.json_export import export_data, export_publications
 
 # ── export_publications ───────────────────────────────────────────────────
 
@@ -83,25 +83,14 @@ def test_export_publications_partial_data():
     assert result["other_publications"] == []
 
 
-def test_export_publications_title_cleaning():
-    """Test that publication titles are cleaned (HTML stripped, Unicode normalized)."""
-    journals = [
-        {
-            "title": "<i>Italic</i> title with <sub>subscript</sub>",
-            "year": "2024",
-            "doi": "",
-            "authors": "Smith",
-            "venue": "J",
-        },
-    ]
+def test_export_publications_title_keeps_markup():
+    """Titles keep ORCID's markup; the composer renders it per format (owner, 2026-11-13)."""
+    title = "<i>Italic</i> title with <sub>subscript</sub> and $\\alpha$"
+    journals = [{"title": title, "year": "2024", "doi": "", "authors": "Smith", "venue": "J"}]
 
     result = export_publications("0000-0001-2345-6789", journals, [], [])
 
-    # HTML tags should be stripped, subscripts converted to Unicode
-    cleaned_title = result["journal_articles"][0]["title"]
-    assert "<i>" not in cleaned_title
-    assert "<sub>" not in cleaned_title
-    # Should be plain text (normalize.clean_for_plaintext does this)
+    assert result["journal_articles"][0]["title"] == title
 
 
 def test_export_publications_metadata_structure():
@@ -277,49 +266,17 @@ def test_export_data_metadata_structure():
     datetime.fromisoformat(meta["generated_at"])
 
 
-# ── _clean_pub helper ─────────────────────────────────────────────────────
+# ── Entries are copies, as extracted ──────────────────────────────────────
 
 
-def test_clean_pub_cleans_title():
-    """Test that _clean_pub cleans publication title."""
-    pub = {"title": "<i>Title</i> with <sub>sub</sub>", "year": "2024", "doi": ""}
+def test_export_publications_copies_entries_unchanged():
+    """Every field as extracted, markup included; the caller's dicts are not shared."""
+    pub = {"title": "<i>Original</i>", "year": "2024", "doi": "10.1000/test", "authors": "Smith"}
 
-    cleaned = _clean_pub(pub)
+    result = export_publications("0000-0001-2345-6789", [pub], [], [])
 
-    assert "<i>" not in cleaned["title"]
-    assert "<sub>" not in cleaned["title"]
-    assert "Title" in cleaned["title"]
-
-
-def test_clean_pub_preserves_other_fields():
-    """Test that _clean_pub preserves non-title fields."""
-    pub = {"title": "Title", "year": "2024", "doi": "10.1000/test", "authors": "Smith"}
-
-    cleaned = _clean_pub(pub)
-
-    assert cleaned["year"] == "2024"
-    assert cleaned["doi"] == "10.1000/test"
-    assert cleaned["authors"] == "Smith"
-
-
-def test_clean_pub_returns_copy():
-    """Test that _clean_pub returns a new dict (doesn't mutate original)."""
-    pub = {"title": "<i>Original</i>", "year": "2024"}
-
-    cleaned = _clean_pub(pub)
-
-    # Original should be unchanged
-    assert pub["title"] == "<i>Original</i>"
-    assert cleaned["title"] != pub["title"]
-
-
-def test_clean_pub_handles_missing_title():
-    """Test _clean_pub when title is missing."""
-    pub = {"year": "2024", "doi": ""}
-
-    cleaned = _clean_pub(pub)
-
-    assert "title" not in cleaned or cleaned.get("title") is None
+    assert result["journal_articles"][0] == pub
+    assert result["journal_articles"][0] is not pub
 
 
 # ── Edge Cases ────────────────────────────────────────────────────────────

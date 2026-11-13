@@ -210,6 +210,22 @@ def test_family_first_authors_in_a_work():
     assert journals[0]["authors"] == "Doe, J.A., Li, B."
 
 
+def test_author_names_are_structured_and_complete():
+    """author_names: every credit name as {family, given}, past the display limit too."""
+    names = ["Doe, Jane A.", "Bo Li", "Smith JA", "Madonna"] + [f"Ann Extra{i}" for i in range(9)]
+    contributors = {"contributor": [{"credit-name": {"value": n}} for n in names]}
+    journals, _, _ = extract_publications(_record(_work(contributors=contributors)), author_limit=2)
+    parsed = journals[0]["author_names"]
+    assert parsed[:4] == [
+        {"family": "Doe", "given": "Jane A."},
+        {"family": "Li", "given": "Bo"},
+        {"family": "Smith", "given": "JA"},
+        {"family": "Madonna", "given": ""},
+    ]
+    assert len(parsed) == len(names)
+    assert journals[0]["authors"] == "Doe, J.A., Li, B., et al."  # kept until the composer renders
+
+
 @pytest.mark.parametrize(
     ("raw", "doi"),
     [
@@ -285,3 +301,10 @@ def test_month_narrows_the_period():
     ]
     fy2025 = filter_publications_by_period(pubs, period_from_flag("year", "2025"))
     assert [p["title"] for p in fy2025] == ["October", "Year only"]
+
+
+def test_title_keeps_markup_with_whitespace_collapsed():
+    """The composer renders the markup; line breaks and indentation are not content."""
+    raw = "Abundance in\n            <i>In Vitro</i>\n            Cocultures &amp; more"
+    journals, _, _ = extract_publications(_record(_work(title={"title": {"value": raw}})))
+    assert journals[0]["title"] == "Abundance in <i>In Vitro</i> Cocultures & more"
