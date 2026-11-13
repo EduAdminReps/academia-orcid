@@ -191,7 +191,9 @@ def extract_publications(record: dict, author_limit: int | None = None) -> tuple
             all_external_ids = {
                 str(eid.get("external-id-type")): str(eid.get("external-id-value"))
                 for eid in external_ids
-                if isinstance(eid, dict) and eid.get("external-id-type") and eid.get("external-id-value")
+                if isinstance(eid, dict)
+                and eid.get("external-id-type")
+                and eid.get("external-id-value")
             }
             doi = _work_doi(external_ids)
             all_external_ids.pop("doi", None)
@@ -200,27 +202,31 @@ def extract_publications(record: dict, author_limit: int | None = None) -> tuple
             formatted = [format_author(name) for name in author_names[:author_limit]]
             if len(author_names) > author_limit:
                 formatted.append("et al.")
-            entries.append({
-                "authors": ", ".join(formatted),
-                "raw_authors": author_names,
-                "title": title,
-                "venue": venue,
-                "year": _value(date, "year"),
-                "month": _value(date, "month"),
-                "doi": doi,
-                "url": _value(work, "url"),
-                "pub_type": str(work.get("type") or "").lower(),
-                "external_ids": all_external_ids,
-                "citation": work.get("citation"),
-            })
+            entries.append(
+                {
+                    "authors": ", ".join(formatted),
+                    "raw_authors": author_names,
+                    "title": title,
+                    "venue": venue,
+                    "year": _value(date, "year"),
+                    "month": _value(date, "month"),
+                    "doi": doi,
+                    "url": _value(work, "url"),
+                    "pub_type": str(work.get("type") or "").lower(),
+                    "external_ids": all_external_ids,
+                    "citation": work.get("citation"),
+                }
+            )
         except (AttributeError, TypeError, ValueError) as e:
             # Not expected with the null-safe reads above; say which work, so a
             # real parsing bug is visible rather than a silent gap.
             logger.warning(f"Skipping work {work.get('put-code')}: {type(e).__name__}: {e}")
 
     def category(pub: dict) -> int:
-        return 0 if pub["pub_type"] in JOURNAL_ARTICLE_TYPES else (
-            1 if pub["pub_type"] in CONFERENCE_PAPER_TYPES else 2
+        return (
+            0
+            if pub["pub_type"] in JOURNAL_ARTICLE_TYPES
+            else (1 if pub["pub_type"] in CONFERENCE_PAPER_TYPES else 2)
         )
 
     entries.sort(key=category)
@@ -267,11 +273,13 @@ def extract_external_identifiers(record: dict) -> list[dict]:
         url = id_url.get("value", "") if id_url else ""
 
         if id_type and id_value:
-            identifiers.append({
-                "type": html.unescape(id_type),
-                "value": html.unescape(id_value),
-                "url": url,
-            })
+            identifiers.append(
+                {
+                    "type": html.unescape(id_type),
+                    "value": html.unescape(id_value),
+                    "url": url,
+                }
+            )
 
     return identifiers
 
@@ -313,17 +321,19 @@ def extract_affiliation_items(record: dict, section_name: str, summary_key: str)
             end_date = summary.get("end-date", {})
             end_year = end_date.get("year", {}).get("value", "") if end_date else ""
 
-            items.append({
-                "organization": html.unescape(org_name) if org_name else "",
-                "location": location,
-                "role": html.unescape(role) if role else "",
-                "department": html.unescape(department) if department else "",
-                "start_year": start_year,
-                "end_year": end_year,
-            })
+            items.append(
+                {
+                    "organization": html.unescape(org_name) if org_name else "",
+                    "location": location,
+                    "role": html.unescape(role) if role else "",
+                    "department": html.unescape(department) if department else "",
+                    "start_year": start_year,
+                    "end_year": end_year,
+                }
+            )
 
     # Sort by start year (descending), then by organization name
-    items.sort(key=lambda x: (x.get("start_year", "0") or "0"), reverse=True)
+    items.sort(key=lambda x: x.get("start_year", "0") or "0", reverse=True)
 
     return items
 
@@ -387,15 +397,17 @@ def extract_fundings(record: dict) -> list[dict]:
             end_date = summary.get("end-date", {})
             end_year = end_date.get("year", {}).get("value", "") if end_date else ""
 
-            items.append({
-                "title": html.unescape(title) if title else "",
-                "organization": html.unescape(org_name) if org_name else "",
-                "type": funding_type,
-                "start_year": start_year,
-                "end_year": end_year,
-            })
+            items.append(
+                {
+                    "title": html.unescape(title) if title else "",
+                    "organization": html.unescape(org_name) if org_name else "",
+                    "type": funding_type,
+                    "start_year": start_year,
+                    "end_year": end_year,
+                }
+            )
 
     # Sort by start year (descending)
-    items.sort(key=lambda x: (x.get("start_year", "0") or "0"), reverse=True)
+    items.sort(key=lambda x: x.get("start_year", "0") or "0", reverse=True)
 
     return items

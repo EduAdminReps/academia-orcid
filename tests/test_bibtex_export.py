@@ -15,7 +15,6 @@ from academia_orcid.bibtex_export import (
 )
 from academia_orcid.extract import extract_publications
 
-
 # ── Cite key generation ──────────────────────────────────────────────────
 
 
@@ -278,11 +277,11 @@ class TestPubToBibtexEntry:
 
 class TestEmbeddedBibtex:
     def test_extract_cite_key(self):
-        bib = '@article{Smith_2024, title={Paper}}'
+        bib = "@article{Smith_2024, title={Paper}}"
         assert _extract_cite_key_from_bibtex(bib) == "Smith_2024"
 
     def test_extract_cite_key_inproceedings(self):
-        bib = '@inproceedings{Jones2023a, author={Jones}}'
+        bib = "@inproceedings{Jones2023a, author={Jones}}"
         assert _extract_cite_key_from_bibtex(bib) == "Jones2023a"
 
     def test_extract_cite_key_invalid(self):
@@ -309,81 +308,89 @@ class TestExportBibtex:
         assert result == ""
 
     def test_header_comment(self):
-        pubs = [{
-            "raw_authors": ["Alice Smith"],
-            "authors": "Smith, A.",
-            "title": "Paper",
-            "venue": "Journal",
-            "year": "2024",
-            "month": "",
-            "doi": "",
-            "url": "",
-            "pub_type": "journal-article",
-            "external_ids": {},
-            "citation": None,
-        }]
+        pubs = [
+            {
+                "raw_authors": ["Alice Smith"],
+                "authors": "Smith, A.",
+                "title": "Paper",
+                "venue": "Journal",
+                "year": "2024",
+                "month": "",
+                "doi": "",
+                "url": "",
+                "pub_type": "journal-article",
+                "external_ids": {},
+                "citation": None,
+            }
+        ]
         result = export_bibtex("0000-0001-2345-6789", pubs, [], [])
         assert "% BibTeX export from ORCID record: 0000-0001-2345-6789" in result
         assert "% Source: https://orcid.org/0000-0001-2345-6789" in result
         assert "% Entries: 1 total" in result
 
     def test_generated_entry(self):
-        pubs = [{
-            "raw_authors": ["Alice Smith"],
-            "authors": "Smith, A.",
-            "title": "My Paper",
-            "venue": "Nature",
-            "year": "2024",
-            "month": "",
-            "doi": "10.1038/001",
-            "url": "",
-            "pub_type": "journal-article",
-            "external_ids": {},
-            "citation": None,
-        }]
+        pubs = [
+            {
+                "raw_authors": ["Alice Smith"],
+                "authors": "Smith, A.",
+                "title": "My Paper",
+                "venue": "Nature",
+                "year": "2024",
+                "month": "",
+                "doi": "10.1038/001",
+                "url": "",
+                "pub_type": "journal-article",
+                "external_ids": {},
+                "citation": None,
+            }
+        ]
         result = export_bibtex("0000-0001-2345-6789", pubs, [], [])
         assert "@article{Smith2024," in result
         assert "title = {{My Paper}}" in result
         assert "(0 from ORCID, 1 generated)" in result
 
     def test_embedded_bibtex_preferred(self):
-        pubs = [{
-            "raw_authors": ["Alice Smith"],
-            "authors": "Smith, A.",
-            "title": "Paper",
-            "venue": "Nature",
-            "year": "2024",
-            "month": "",
-            "doi": "10.1038/001",
-            "url": "",
-            "pub_type": "journal-article",
-            "external_ids": {},
-            "citation": {
-                "citation-type": "bibtex",
-                "citation-value": "@article{Smith_2024,\n  title={Embedded},\n  year={2024}\n}",
-            },
-        }]
+        pubs = [
+            {
+                "raw_authors": ["Alice Smith"],
+                "authors": "Smith, A.",
+                "title": "Paper",
+                "venue": "Nature",
+                "year": "2024",
+                "month": "",
+                "doi": "10.1038/001",
+                "url": "",
+                "pub_type": "journal-article",
+                "external_ids": {},
+                "citation": {
+                    "citation-type": "bibtex",
+                    "citation-value": "@article{Smith_2024,\n  title={Embedded},\n  year={2024}\n}",
+                },
+            }
+        ]
         result = export_bibtex("0000-0001-2345-6789", pubs, [], [])
         assert "title={Embedded}" in result
         assert "(1 from ORCID, 0 generated)" in result
 
     def test_non_bibtex_citation_ignored(self):
-        pubs = [{
-            "raw_authors": ["Alice Smith"],
-            "authors": "Smith, A.",
-            "title": "Paper",
-            "venue": "Nature",
-            "year": "2024",
-            "month": "",
-            "doi": "",
-            "url": "",
-            "pub_type": "journal-article",
-            "external_ids": {},
-            "citation": {
-                "citation-type": "ris",
-                "citation-value": "TY  - JOUR\nTI  - Paper\n",
-            },
-        }]
+        pubs = [
+            {
+                "raw_authors": ["Alice Smith"],
+                "authors": "Smith, A.",
+                "title": "Paper",
+                "venue": "Nature",
+                "year": "2024",
+                "month": "",
+                "doi": "",
+                "url": "",
+                "pub_type": "journal-article",
+                "external_ids": {},
+                "citation": {
+                    "citation-type": "ris",
+                    "citation-value": "TY  - JOUR\nTI  - Paper\n",
+                },
+            }
+        ]
         result = export_bibtex("0000-0001-2345-6789", pubs, [], [])
         # Should fall back to generated since it's not bibtex type
         assert "(0 from ORCID, 1 generated)" in result
@@ -550,21 +557,25 @@ class TestExtractIntegration:
         record = {
             "activities-summary": {
                 "works": {
-                    "group": [{
-                        "work-summary": [{
-                            "type": "journal-article",
-                            "title": {"title": {"value": "Paper"}},
-                            "publication-date": {
-                                "year": {"value": "2024"},
-                                "month": {"value": "06"},
-                            },
-                            "journal-title": None,
-                            "contributors": {"contributor": [
-                                {"credit-name": {"value": "Smith"}}
-                            ]},
-                            "external-ids": {"external-id": []},
-                        }]
-                    }]
+                    "group": [
+                        {
+                            "work-summary": [
+                                {
+                                    "type": "journal-article",
+                                    "title": {"title": {"value": "Paper"}},
+                                    "publication-date": {
+                                        "year": {"value": "2024"},
+                                        "month": {"value": "06"},
+                                    },
+                                    "journal-title": None,
+                                    "contributors": {
+                                        "contributor": [{"credit-name": {"value": "Smith"}}]
+                                    },
+                                    "external-ids": {"external-id": []},
+                                }
+                            ]
+                        }
+                    ]
                 }
             }
         }
@@ -575,19 +586,23 @@ class TestExtractIntegration:
         record = {
             "activities-summary": {
                 "works": {
-                    "group": [{
-                        "work-summary": [{
-                            "type": "journal-article",
-                            "title": {"title": {"value": "Paper"}},
-                            "publication-date": {"year": {"value": "2024"}},
-                            "journal-title": None,
-                            "contributors": {"contributor": [
-                                {"credit-name": {"value": "Smith"}}
-                            ]},
-                            "external-ids": {"external-id": []},
-                            "url": {"value": "https://example.com/paper"},
-                        }]
-                    }]
+                    "group": [
+                        {
+                            "work-summary": [
+                                {
+                                    "type": "journal-article",
+                                    "title": {"title": {"value": "Paper"}},
+                                    "publication-date": {"year": {"value": "2024"}},
+                                    "journal-title": None,
+                                    "contributors": {
+                                        "contributor": [{"credit-name": {"value": "Smith"}}]
+                                    },
+                                    "external-ids": {"external-id": []},
+                                    "url": {"value": "https://example.com/paper"},
+                                }
+                            ]
+                        }
+                    ]
                 }
             }
         }
@@ -598,21 +613,33 @@ class TestExtractIntegration:
         record = {
             "activities-summary": {
                 "works": {
-                    "group": [{
-                        "work-summary": [{
-                            "type": "book",
-                            "title": {"title": {"value": "A Book"}},
-                            "publication-date": {"year": {"value": "2024"}},
-                            "journal-title": None,
-                            "contributors": {"contributor": [
-                                {"credit-name": {"value": "Smith"}}
-                            ]},
-                            "external-ids": {"external-id": [
-                                {"external-id-type": "doi", "external-id-value": "10.1000/b1"},
-                                {"external-id-type": "isbn", "external-id-value": "978-0-123456-78-9"},
-                            ]},
-                        }]
-                    }]
+                    "group": [
+                        {
+                            "work-summary": [
+                                {
+                                    "type": "book",
+                                    "title": {"title": {"value": "A Book"}},
+                                    "publication-date": {"year": {"value": "2024"}},
+                                    "journal-title": None,
+                                    "contributors": {
+                                        "contributor": [{"credit-name": {"value": "Smith"}}]
+                                    },
+                                    "external-ids": {
+                                        "external-id": [
+                                            {
+                                                "external-id-type": "doi",
+                                                "external-id-value": "10.1000/b1",
+                                            },
+                                            {
+                                                "external-id-type": "isbn",
+                                                "external-id-value": "978-0-123456-78-9",
+                                            },
+                                        ]
+                                    },
+                                }
+                            ]
+                        }
+                    ]
                 }
             }
         }
@@ -625,19 +652,23 @@ class TestExtractIntegration:
         record = {
             "activities-summary": {
                 "works": {
-                    "group": [{
-                        "work-summary": [{
-                            "type": "journal-article",
-                            "title": {"title": {"value": "Paper"}},
-                            "publication-date": {"year": {"value": "2024"}},
-                            "journal-title": None,
-                            "contributors": {"contributor": [
-                                {"credit-name": {"value": "Smith"}}
-                            ]},
-                            "external-ids": {"external-id": []},
-                            "citation": citation,
-                        }]
-                    }]
+                    "group": [
+                        {
+                            "work-summary": [
+                                {
+                                    "type": "journal-article",
+                                    "title": {"title": {"value": "Paper"}},
+                                    "publication-date": {"year": {"value": "2024"}},
+                                    "journal-title": None,
+                                    "contributors": {
+                                        "contributor": [{"credit-name": {"value": "Smith"}}]
+                                    },
+                                    "external-ids": {"external-id": []},
+                                    "citation": citation,
+                                }
+                            ]
+                        }
+                    ]
                 }
             }
         }
@@ -650,8 +681,15 @@ class TestExtractIntegration:
 
 def _pub(title, citation=None, year="2024", author="Jane Doe"):
     pub = {
-        "raw_authors": [author], "authors": "Doe, J.", "title": title, "venue": "",
-        "year": year, "month": "", "doi": "", "url": "", "pub_type": "journal-article",
+        "raw_authors": [author],
+        "authors": "Doe, J.",
+        "title": title,
+        "venue": "",
+        "year": year,
+        "month": "",
+        "doi": "",
+        "url": "",
+        "pub_type": "journal-article",
         "external_ids": {},
     }
     if citation is not None:
@@ -661,6 +699,7 @@ def _pub(title, citation=None, year="2024", author="Jane Doe"):
 
 def _keys(bib: str) -> list[str]:
     import re
+
     return re.findall(r"^\s*@\s*\w+\s*\{\s*([^,\s]*)\s*,", bib, flags=re.M)
 
 
@@ -670,33 +709,56 @@ class TestUniqueKeys:
         assert _extract_cite_key_from_bibtex("  @ inproceedings{ doe2024 , title={A}}") == "doe2024"
 
     def test_space_before_brace_duplicates_renamed(self):
-        bib = export_bibtex("0000-0001-2345-6789", [
-            _pub("A", "@article {doe2024,\n title={A}}"),
-            _pub("B", "@article {doe2024,\n title={B}}"),
-        ], [], [])
+        bib = export_bibtex(
+            "0000-0001-2345-6789",
+            [
+                _pub("A", "@article {doe2024,\n title={A}}"),
+                _pub("B", "@article {doe2024,\n title={B}}"),
+            ],
+            [],
+            [],
+        )
         keys = _keys(bib)
         assert len(keys) == 2 and len(set(keys)) == 2
         assert keys[0] == "doe2024"
 
     def test_generated_suffix_never_reused_by_embedded_key(self):
-        bib = export_bibtex("0000-0001-2345-6789", [
-            _pub("A"), _pub("B"),                        # Doe2024, Doe2024a
-            _pub("C", "@article{Doe2024a, title={C}}"),  # embedded key already taken
-        ], [], [])
+        bib = export_bibtex(
+            "0000-0001-2345-6789",
+            [
+                _pub("A"),
+                _pub("B"),  # Doe2024, Doe2024a
+                _pub("C", "@article{Doe2024a, title={C}}"),  # embedded key already taken
+            ],
+            [],
+            [],
+        )
         keys = _keys(bib)
         assert keys[:2] == ["Doe2024", "Doe2024a"]
         assert len(set(keys)) == 3
 
     def test_embedded_key_never_reused_by_generated_key(self):
-        bib = export_bibtex("0000-0001-2345-6789", [
-            _pub("A", "@article{Doe2024, title={A}}"), _pub("B"),
-        ], [], [])
+        bib = export_bibtex(
+            "0000-0001-2345-6789",
+            [
+                _pub("A", "@article{Doe2024, title={A}}"),
+                _pub("B"),
+            ],
+            [],
+            [],
+        )
         assert _keys(bib) == ["Doe2024", "Doe2024a"]
 
     def test_keys_differing_only_in_case_are_repeats(self):
-        bib = export_bibtex("0000-0001-2345-6789", [
-            _pub("A", "@article{doe2024, title={A}}"), _pub("B"),
-        ], [], [])
+        bib = export_bibtex(
+            "0000-0001-2345-6789",
+            [
+                _pub("A", "@article{doe2024, title={A}}"),
+                _pub("B"),
+            ],
+            [],
+            [],
+        )
         keys = _keys(bib)
         assert len({k.casefold() for k in keys}) == 2
 
@@ -710,11 +772,14 @@ class TestUniqueKeys:
         bib = export_bibtex("0000-0001-2345-6789", [_pub("A", "@article{, title={A}}")], [], [])
         assert _keys(bib) == ["Doe2024"]
 
-    @pytest.mark.parametrize("value", [
-        "<head><title>Citation</title></head>",
-        "Doe, J. (2024). A paper. Journal, 1, 2-3.",
-        "",
-    ])
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "<head><title>Citation</title></head>",
+            "Doe, J. (2024). A paper. Journal, 1, 2-3.",
+            "",
+        ],
+    )
     def test_not_bibtex_falls_back_to_generated_entry(self, value):
         bib = export_bibtex("0000-0001-2345-6789", [_pub("A paper", value)], [], [])
         assert "(0 from ORCID, 1 generated)" in bib

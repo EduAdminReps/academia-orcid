@@ -2,7 +2,6 @@
 
 from academia_orcid.cli import validate_uin
 
-
 # ── SECURITY: UIN validation ──────────────────────────────────────────────
 
 

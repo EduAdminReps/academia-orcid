@@ -73,6 +73,7 @@ def _maybe_enrich(args, journal_articles, conference_papers, other_publications)
     """Apply DOI enrichment if --enrich flag is set. Returns the (possibly enriched) lists."""
     if args.enrich:
         from academia_orcid.enrich import enrich_publications
+
         logger.info("Enriching publications via DOI content negotiation...")
         journal_articles = enrich_publications(journal_articles)
         conference_papers = enrich_publications(conference_papers)
@@ -83,6 +84,7 @@ def _maybe_enrich(args, journal_articles, conference_papers, other_publications)
 # ---------------------------------------------------------------------------
 # Person info extraction from ORCID record
 # ---------------------------------------------------------------------------
+
 
 def extract_person_info(record: dict) -> dict:
     """Extract name, institution, and department from an ORCID record.
@@ -125,6 +127,7 @@ def extract_person_info(record: dict) -> dict:
 # LaTeX utilities (adapted from compose_latex.py)
 # ---------------------------------------------------------------------------
 
+
 def _substitute_template(content: str, variables: dict) -> str:
     """Substitute %%key%% placeholders in a template string.
 
@@ -142,7 +145,7 @@ def generate_header(faculty_info: dict, template_path: Path, output_path: Path):
     # Remove lines where an optional field was empty, e.g. {\Large }\\[1.5em].
     # LaTeX raises "There's no line here to end" when \\ follows an empty group
     # in a center environment. This happens when college/department are absent.
-    content = re.sub(r'[ \t]*\{\\[A-Za-z]+[ \t]*\}\\\\[^\n]*\n', '', content)
+    content = re.sub(r"[ \t]*\{\\[A-Za-z]+[ \t]*\}\\\\[^\n]*\n", "", content)
     output_path.write_text(content)
 
 
@@ -157,8 +160,17 @@ def generate_main(display_year: str, template_path: Path, output_path: Path):
 # or archived: --output-dir may be a folder holding other files (audit ORC-08).
 LATEX_SOURCES = ["preamble.tex", "header.tex", "main.tex"]
 FRAGMENTS = [OUTPUT_DATA_TEX, OUTPUT_PUBLICATIONS_TEX, OUTPUT_PUBLICATIONS_SUMMARY_TEX]
-LATEX_BYPRODUCTS = [".aux", ".log", ".out", ".toc", ".lof", ".lot",
-                    ".fls", ".fdb_latexmk", ".synctex.gz"]
+LATEX_BYPRODUCTS = [
+    ".aux",
+    ".log",
+    ".out",
+    ".toc",
+    ".lof",
+    ".lot",
+    ".fls",
+    ".fdb_latexmk",
+    ".synctex.gz",
+]
 
 
 def _unlink(path: Path) -> None:
@@ -228,6 +240,7 @@ def compile_latex(output_dir: Path, report_id: str) -> Path | None:
 # Shared: resolve ORCID ID and fetch record
 # ---------------------------------------------------------------------------
 
+
 def resolve_and_fetch(args) -> tuple[str, dict]:
     """Validate the ORCID ID and load its record (cached or fetched).
 
@@ -262,6 +275,7 @@ def resolve_and_fetch(args) -> tuple[str, dict]:
 # ---------------------------------------------------------------------------
 # LaTeX pipeline
 # ---------------------------------------------------------------------------
+
 
 def generate_latex_cv(args):
     """Generate a complete ORCID CV as LaTeX source and PDF."""
@@ -306,8 +320,7 @@ def generate_latex_cv(args):
         "institution": escape_latex(person["institution"]),
         "college": "",
     }
-    generate_header(faculty_info, TEMPLATES_DIR / "header.tex.template",
-                    output_dir / "header.tex")
+    generate_header(faculty_info, TEMPLATES_DIR / "header.tex.template", output_dir / "header.tex")
 
     # Generate orcid-data.tex
     logger.info("Generating ORCID data section...")
@@ -321,8 +334,15 @@ def generate_latex_cv(args):
     services = extract_services(record)
 
     data_latex = generate_data_latex(
-        orcid_id, biography, external_identifiers, fundings,
-        employments, educations, distinctions, memberships, services
+        orcid_id,
+        biography,
+        external_identifiers,
+        fundings,
+        employments,
+        educations,
+        distinctions,
+        memberships,
+        services,
     )
     if data_latex:
         (output_dir / OUTPUT_DATA_TEX).write_text(data_latex)
@@ -345,13 +365,14 @@ def generate_latex_cv(args):
     if pubs_latex:
         (output_dir / OUTPUT_PUBLICATIONS_TEX).write_text(pubs_latex)
         (output_dir / OUTPUT_PUBLICATIONS_SUMMARY_TEX).write_text(
-            generate_latex_summary(orcid_id, journal_articles, conference_papers, other_publications)
+            generate_latex_summary(
+                orcid_id, journal_articles, conference_papers, other_publications
+            )
         )
         logger.info(f"  Created: {OUTPUT_PUBLICATIONS_TEX}, {OUTPUT_PUBLICATIONS_SUMMARY_TEX}")
 
     # Generate main.tex
-    generate_main(display_year, TEMPLATES_DIR / "main.tex.template",
-                  output_dir / "main.tex")
+    generate_main(display_year, TEMPLATES_DIR / "main.tex.template", output_dir / "main.tex")
 
     # Source archive
     logger.info("Creating source archive...")
@@ -376,6 +397,7 @@ def generate_latex_cv(args):
 # ---------------------------------------------------------------------------
 # BibTeX pipeline
 # ---------------------------------------------------------------------------
+
 
 def generate_bibtex_cv(args):
     """Generate a BibTeX file from ORCID publications."""
@@ -432,6 +454,7 @@ def generate_bibtex_cv(args):
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def parse_args(argv: list[str] | None = None):
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -439,47 +462,66 @@ def parse_args(argv: list[str] | None = None):
     )
 
     # Identification
-    parser.add_argument("--orcid", required=True,
-                        help="ORCID ID (e.g., 0000-0003-0831-6109)")
+    parser.add_argument("--orcid", required=True, help="ORCID ID (e.g., 0000-0003-0831-6109)")
 
     # Format
     parser.add_argument(
-        "--format", default="latex", choices=["latex", "bibtex"],
-        help="Output format (default: latex)"
+        "--format",
+        default="latex",
+        choices=["latex", "bibtex"],
+        help="Output format (default: latex)",
     )
 
     # Options
     add_period_args(parser)  # filters publications; see academia_orcid.periods
-    parser.add_argument("--output-dir", default=None,
-                        help="Output directory (default: out_cv/<orcid-id>/)")
-    parser.add_argument("--data-dir", default=str(_REPO_ROOT),
-                        help="Base directory for ORCID cache (default: repo root)")
+    parser.add_argument(
+        "--output-dir", default=None, help="Output directory (default: out_cv/<orcid-id>/)"
+    )
+    parser.add_argument(
+        "--data-dir",
+        default=str(_REPO_ROOT),
+        help="Base directory for ORCID cache (default: repo root)",
+    )
 
     # Fetch control
     fetch_group = parser.add_mutually_exclusive_group()
-    fetch_group.add_argument("--fetch", dest="fetch", action="store_true", default=True,
-                             help="Fetch from ORCID API if not cached (default)")
-    fetch_group.add_argument("--no-fetch", dest="fetch", action="store_false",
-                             help="Only use cached records")
-    fetch_group.add_argument("--force-fetch", action="store_true",
-                             help="Always fetch from API (refresh cache)")
+    fetch_group.add_argument(
+        "--fetch",
+        dest="fetch",
+        action="store_true",
+        default=True,
+        help="Fetch from ORCID API if not cached (default)",
+    )
+    fetch_group.add_argument(
+        "--no-fetch", dest="fetch", action="store_false", help="Only use cached records"
+    )
+    fetch_group.add_argument(
+        "--force-fetch", action="store_true", help="Always fetch from API (refresh cache)"
+    )
 
     # Enrichment
-    parser.add_argument("--enrich", action="store_true",
-                        help="Enrich publications via DOI content negotiation (fills gaps)")
+    parser.add_argument(
+        "--enrich",
+        action="store_true",
+        help="Enrich publications via DOI content negotiation (fills gaps)",
+    )
 
     # LaTeX-specific
-    parser.add_argument("--skip-compile", action="store_true",
-                        help="Generate LaTeX source but skip PDF compilation")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Show what would happen without making changes")
+    parser.add_argument(
+        "--skip-compile", action="store_true", help="Generate LaTeX source but skip PDF compilation"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Show what would happen without making changes"
+    )
 
     # Logging
-    parser.add_argument("--log-level", default="INFO",
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-                        help="Logging level (default: INFO)")
-    parser.add_argument("--log-file", default=None,
-                        help="Log to file instead of stderr")
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging level (default: INFO)",
+    )
+    parser.add_argument("--log-file", default=None, help="Log to file instead of stderr")
 
     return parser.parse_args(argv)
 

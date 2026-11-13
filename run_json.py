@@ -62,7 +62,9 @@ def main(argv: list[str] | None = None):
     output_path = Path(args.output_dir)
     section = args.section
     period = resolve_period(args)
-    output_filename = OUTPUT_PUBLICATIONS_JSON if section == SECTION_PUBLICATIONS else OUTPUT_DATA_JSON
+    output_filename = (
+        OUTPUT_PUBLICATIONS_JSON if section == SECTION_PUBLICATIONS else OUTPUT_DATA_JSON
+    )
 
     orcid_id = resolve_orcid_id(args, logger)
     if orcid_id is None:
@@ -81,7 +83,9 @@ def main(argv: list[str] | None = None):
         conference_papers = filter_publications_by_period(conference_papers, period)
         other_publications = filter_publications_by_period(other_publications, period)
 
-        data = export_publications(orcid_id, journal_articles, conference_papers, other_publications)
+        data = export_publications(
+            orcid_id, journal_articles, conference_papers, other_publications
+        )
     else:
         data = export_data(
             orcid_id,

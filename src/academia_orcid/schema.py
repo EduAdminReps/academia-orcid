@@ -13,19 +13,21 @@ update these types and the extraction logic in extract.py accordingly.
 
 from typing import TypedDict
 
-
 # =============================================================================
 # Value Wrappers
 # ORCID often wraps simple values in {"value": ...} objects
 # =============================================================================
 
+
 class StringValue(TypedDict, total=False):
     """Wrapper for string values."""
+
     value: str
 
 
 class DatePart(TypedDict, total=False):
     """Year, month, or day component."""
+
     value: str  # e.g., "2024", "01", "15"
 
 
@@ -33,13 +35,15 @@ class DatePart(TypedDict, total=False):
 # Identifiers
 # =============================================================================
 
+
 class OrcidIdentifier(TypedDict, total=False):
     """ORCID identifier block.
 
     Path: orcid-identifier
     Docs: https://info.orcid.org/documentation/integration-guide/orcid-record/#h-orcid-identifier
     """
-    uri: str   # "https://orcid.org/0000-0000-0000-0000"
+
+    uri: str  # "https://orcid.org/0000-0000-0000-0000"
     path: str  # "0000-0000-0000-0000"
     host: str  # "orcid.org"
 
@@ -50,13 +54,15 @@ class ExternalId(TypedDict, total=False):
     Path: works/group/work-summary/external-ids/external-id[]
     Docs: https://info.orcid.org/documentation/integration-guide/orcid-record/#h-external-identifiers
     """
-    external_id_type: str   # "doi", "pmid", "isbn", "issn", etc.
+
+    external_id_type: str  # "doi", "pmid", "isbn", "issn", etc.
     external_id_value: str  # The actual identifier value
     external_id_url: StringValue  # Optional URL
 
 
 class ExternalIds(TypedDict, total=False):
     """Container for external identifiers."""
+
     external_id: list[ExternalId]
 
 
@@ -64,12 +70,14 @@ class ExternalIds(TypedDict, total=False):
 # Publication Date
 # =============================================================================
 
+
 class PublicationDate(TypedDict, total=False):
     """Publication date with optional precision.
 
     Path: works/group/work-summary/publication-date
     Note: May have year only, year+month, or full date
     """
+
     year: DatePart
     month: DatePart
     day: DatePart
@@ -79,10 +87,12 @@ class PublicationDate(TypedDict, total=False):
 # Contributors (Authors)
 # =============================================================================
 
+
 class ContributorAttributes(TypedDict, total=False):
     """Contributor role and sequence."""
+
     contributor_sequence: str  # "first", "additional"
-    contributor_role: str      # "author", "editor", etc.
+    contributor_role: str  # "author", "editor", etc.
 
 
 class Contributor(TypedDict, total=False):
@@ -91,13 +101,15 @@ class Contributor(TypedDict, total=False):
     Path: works/group/work-summary/contributors/contributor[]
     Docs: https://info.orcid.org/documentation/integration-guide/orcid-record/#h-contributors
     """
-    credit_name: StringValue           # Display name
+
+    credit_name: StringValue  # Display name
     contributor_orcid: OrcidIdentifier  # Optional ORCID of contributor
     contributor_attributes: ContributorAttributes
 
 
 class Contributors(TypedDict, total=False):
     """Container for contributors."""
+
     contributor: list[Contributor]
 
 
@@ -105,11 +117,13 @@ class Contributors(TypedDict, total=False):
 # Work Title
 # =============================================================================
 
+
 class WorkTitleWrapper(TypedDict, total=False):
     """Work title with optional subtitle and translated title.
 
     Path: works/group/work-summary/title
     """
+
     title: StringValue
     subtitle: StringValue
     translated_title: StringValue
@@ -118,6 +132,7 @@ class WorkTitleWrapper(TypedDict, total=False):
 # =============================================================================
 # Work (Publication)
 # =============================================================================
+
 
 class WorkSummary(TypedDict, total=False):
     """Summary of a single work/publication.
@@ -132,19 +147,20 @@ class WorkSummary(TypedDict, total=False):
 
     Full list: https://info.orcid.org/documentation/integration-guide/orcid-record/#h-work-types
     """
-    put_code: int                    # Unique identifier for this work
-    type: str                        # Publication type (see above)
+
+    put_code: int  # Unique identifier for this work
+    type: str  # Publication type (see above)
     title: WorkTitleWrapper
-    journal_title: StringValue       # Journal or venue name
+    journal_title: StringValue  # Journal or venue name
     publication_date: PublicationDate
     external_ids: ExternalIds
     contributors: Contributors
-    url: StringValue                 # Link to the work
+    url: StringValue  # Link to the work
 
     # Less commonly used but available:
-    short_description: str           # Abstract/summary
-    citation: dict                   # Citation in various formats
-    country: StringValue             # Country of publication
+    short_description: str  # Abstract/summary
+    citation: dict  # Citation in various formats
+    country: StringValue  # Country of publication
 
 
 class WorkGroup(TypedDict, total=False):
@@ -153,12 +169,14 @@ class WorkGroup(TypedDict, total=False):
     Path: works/group[]
     Note: We typically use the first work-summary in each group.
     """
+
     work_summary: list[WorkSummary]
     external_ids: ExternalIds  # Merged external IDs across group
 
 
 class Works(TypedDict, total=False):
     """Container for all works."""
+
     group: list[WorkGroup]
 
 
@@ -166,11 +184,13 @@ class Works(TypedDict, total=False):
 # Person Section
 # =============================================================================
 
+
 class Biography(TypedDict, total=False):
     """Biography/summary text.
 
     Path: person/biography
     """
+
     content: str  # Free-text biography
     visibility: str  # "public", "limited", "private"
 
@@ -181,13 +201,15 @@ class PersonExternalIdentifier(TypedDict, total=False):
     Path: person/external-identifiers/external-identifier[]
     Note: Different from work external-ids (DOIs, etc.)
     """
-    external_id_type: str   # "Scopus Author ID", "ResearcherID", etc.
+
+    external_id_type: str  # "Scopus Author ID", "ResearcherID", etc.
     external_id_value: str  # The identifier value
     external_id_url: StringValue  # Link to the profile
 
 
 class PersonExternalIdentifiers(TypedDict, total=False):
     """Container for person external identifiers."""
+
     external_identifier: list[PersonExternalIdentifier]
 
 
@@ -197,6 +219,7 @@ class Person(TypedDict, total=False):
     Path: person
     Docs: https://info.orcid.org/documentation/integration-guide/orcid-record/#h-person
     """
+
     name: dict  # Contains given-names, family-name, credit-name
     biography: Biography
     external_identifiers: PersonExternalIdentifiers
@@ -206,8 +229,10 @@ class Person(TypedDict, total=False):
 # Organization (shared by affiliations and fundings)
 # =============================================================================
 
+
 class OrganizationAddress(TypedDict, total=False):
     """Organization address."""
+
     city: str
     region: str  # State/province
     country: str  # ISO country code
@@ -218,6 +243,7 @@ class Organization(TypedDict, total=False):
 
     Used by: employments, educations, distinctions, memberships, services, fundings
     """
+
     name: str
     address: OrganizationAddress
 
@@ -225,6 +251,7 @@ class Organization(TypedDict, total=False):
 # =============================================================================
 # Affiliation Sections (Employment, Education, Distinction, Membership, Service)
 # =============================================================================
+
 
 class AffiliationSummary(TypedDict, total=False):
     """Common structure for affiliation-type entries.
@@ -236,9 +263,10 @@ class AffiliationSummary(TypedDict, total=False):
         - activities-summary/employments/affiliation-group[]/summaries[]/employment-summary
         - activities-summary/educations/affiliation-group[]/summaries[]/education-summary
     """
+
     put_code: int
     department_name: str  # Department or field of study
-    role_title: str       # Job title, degree, award name, etc.
+    role_title: str  # Job title, degree, award name, etc.
     start_date: PublicationDate  # Reuses date structure
     end_date: PublicationDate
     organization: Organization
@@ -249,6 +277,7 @@ class AffiliationGroup(TypedDict, total=False):
 
     Path: activities-summary/{section}/affiliation-group[]
     """
+
     summaries: list[dict]  # Contains {section}-summary objects
 
 
@@ -257,6 +286,7 @@ class Affiliations(TypedDict, total=False):
 
     Used by: employments, educations, distinctions, memberships, services
     """
+
     affiliation_group: list[AffiliationGroup]
 
 
@@ -264,8 +294,10 @@ class Affiliations(TypedDict, total=False):
 # Funding Section
 # =============================================================================
 
+
 class FundingTitle(TypedDict, total=False):
     """Funding/grant title."""
+
     title: StringValue
 
 
@@ -277,6 +309,7 @@ class FundingSummary(TypedDict, total=False):
 
     Funding types: "award", "contract", "grant", "salary-award"
     """
+
     put_code: int
     type: str  # Funding type
     title: FundingTitle
@@ -287,11 +320,13 @@ class FundingSummary(TypedDict, total=False):
 
 class FundingGroup(TypedDict, total=False):
     """Group of related fundings."""
+
     funding_summary: list[FundingSummary]
 
 
 class Fundings(TypedDict, total=False):
     """Container for fundings."""
+
     group: list[FundingGroup]
 
 
@@ -299,12 +334,14 @@ class Fundings(TypedDict, total=False):
 # Activities Summary
 # =============================================================================
 
+
 class ActivitiesSummary(TypedDict, total=False):
     """Summary of all activities (works, education, employment, etc.).
 
     Path: activities-summary
     Docs: https://info.orcid.org/documentation/integration-guide/orcid-record/#h-activities
     """
+
     works: Works
     employments: Affiliations
     educations: Affiliations
@@ -323,6 +360,7 @@ class ActivitiesSummary(TypedDict, total=False):
 # Top-Level Record
 # =============================================================================
 
+
 class OrcidRecord(TypedDict, total=False):
     """Top-level ORCID record structure.
 
@@ -332,6 +370,7 @@ class OrcidRecord(TypedDict, total=False):
         - academia_orcid.fetch: Fetches and caches full record
         - academia_orcid.extract: Extracts publications and data for LaTeX output
     """
+
     orcid_identifier: OrcidIdentifier
     person: Person
     activities_summary: ActivitiesSummary
@@ -362,42 +401,48 @@ class OrcidRecord(TypedDict, total=False):
 # Publication Type Constants
 # =============================================================================
 
-JOURNAL_ARTICLE_TYPES = frozenset({
-    "journal-article",
-    "journal-issue",
-    "article-journal",  # Alternate form
-})
+JOURNAL_ARTICLE_TYPES = frozenset(
+    {
+        "journal-article",
+        "journal-issue",
+        "article-journal",  # Alternate form
+    }
+)
 
-CONFERENCE_PAPER_TYPES = frozenset({
-    "conference-paper",
-    "conference-abstract",
-    "conference-poster",
-    "paper-conference",  # Alternate form
-})
+CONFERENCE_PAPER_TYPES = frozenset(
+    {
+        "conference-paper",
+        "conference-abstract",
+        "conference-poster",
+        "paper-conference",  # Alternate form
+    }
+)
 
 # Types we categorize as "other"
-OTHER_PUBLICATION_TYPES = frozenset({
-    "book",
-    "book-chapter",
-    "book-review",
-    "dictionary-entry",
-    "dissertation",
-    "dissertation-thesis",
-    "edited-book",
-    "encyclopedia-entry",
-    "magazine-article",
-    "manual",
-    "newsletter-article",
-    "newspaper-article",
-    "online-resource",
-    "preprint",
-    "report",
-    "research-tool",
-    "supervised-student-publication",
-    "technical-standard",
-    "test",
-    "translation",
-    "website",
-    "working-paper",
-    "other",
-})
+OTHER_PUBLICATION_TYPES = frozenset(
+    {
+        "book",
+        "book-chapter",
+        "book-review",
+        "dictionary-entry",
+        "dissertation",
+        "dissertation-thesis",
+        "edited-book",
+        "encyclopedia-entry",
+        "magazine-article",
+        "manual",
+        "newsletter-article",
+        "newspaper-article",
+        "online-resource",
+        "preprint",
+        "report",
+        "research-tool",
+        "supervised-student-publication",
+        "technical-standard",
+        "test",
+        "translation",
+        "website",
+        "working-paper",
+        "other",
+    }
+)

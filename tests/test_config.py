@@ -1,6 +1,6 @@
 """Tests for academia_orcid.config module — security validation."""
 
-from academia_orcid.config import Config, DEFAULT_CONFIG
+from academia_orcid.config import DEFAULT_CONFIG, Config
 
 
 def test_config_rejects_non_https_base_url(tmp_path):

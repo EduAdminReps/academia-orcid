@@ -11,10 +11,10 @@ sys.path.insert(0, str(_TOOLS_DIR))
 
 from compose_cv import extract_person_info
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def record_with_name():
@@ -31,20 +31,28 @@ def record_with_name():
         },
         "activities-summary": {
             "employments": {
-                "affiliation-group": [{
-                    "summaries": [{
-                        "employment-summary": {
-                            "organization": {
-                                "name": "Texas A&M University",
-                                "address": {"city": "College Station", "region": "", "country": "US"},
-                            },
-                            "role-title": "Professor",
-                            "department-name": "Electrical Engineering",
-                            "start-date": {"year": {"value": "2015"}},
-                            "end-date": None,
-                        }
-                    }]
-                }],
+                "affiliation-group": [
+                    {
+                        "summaries": [
+                            {
+                                "employment-summary": {
+                                    "organization": {
+                                        "name": "Texas A&M University",
+                                        "address": {
+                                            "city": "College Station",
+                                            "region": "",
+                                            "country": "US",
+                                        },
+                                    },
+                                    "role-title": "Professor",
+                                    "department-name": "Electrical Engineering",
+                                    "start-date": {"year": {"value": "2015"}},
+                                    "end-date": None,
+                                }
+                            }
+                        ]
+                    }
+                ],
             },
             "works": {"group": []},
         },
@@ -77,6 +85,7 @@ def record_no_employment():
 # ---------------------------------------------------------------------------
 # Tests: extract_person_info
 # ---------------------------------------------------------------------------
+
 
 class TestExtractPersonInfo:
     """Test person info extraction from ORCID records."""
@@ -113,11 +122,14 @@ class TestExtractPersonInfo:
 # Tests: LaTeX pipeline (file generation)
 # ---------------------------------------------------------------------------
 
+
 class TestLatexPipeline:
     """Test LaTeX CV generation (without compilation)."""
 
     def test_generates_all_files(self, record_with_name, tmp_path):
         """Verify that the LaTeX pipeline creates all expected files."""
+        import shutil
+
         from compose_cv import (
             TEMPLATES_DIR,
             create_source_archive,
@@ -126,6 +138,7 @@ class TestLatexPipeline:
             generate_header,
             generate_main,
         )
+
         from academia_orcid.extract import (
             extract_biography,
             extract_distinctions,
@@ -138,7 +151,6 @@ class TestLatexPipeline:
             extract_services,
         )
         from academia_orcid.latex import generate_data_latex, generate_latex
-        import shutil
 
         output_dir = tmp_path / "output"
         output_dir.mkdir()
@@ -159,8 +171,9 @@ class TestLatexPipeline:
             "institution": escape_latex(person["institution"]),
             "college": "",
         }
-        generate_header(faculty_info, TEMPLATES_DIR / "header.tex.template",
-                        output_dir / "header.tex")
+        generate_header(
+            faculty_info, TEMPLATES_DIR / "header.tex.template", output_dir / "header.tex"
+        )
 
         # Generate data section
         biography = extract_biography(record_with_name)
@@ -173,8 +186,15 @@ class TestLatexPipeline:
         services = extract_services(record_with_name)
 
         data_latex = generate_data_latex(
-            orcid_id, biography, ext_ids, fundings,
-            employments, educations, distinctions, memberships, services
+            orcid_id,
+            biography,
+            ext_ids,
+            fundings,
+            employments,
+            educations,
+            distinctions,
+            memberships,
+            services,
         )
         if data_latex:
             (output_dir / "orcid-data.tex").write_text(data_latex)
@@ -186,8 +206,7 @@ class TestLatexPipeline:
             (output_dir / "orcid-publications.tex").write_text(pubs_latex)
 
         # Generate main.tex
-        generate_main("All Years", TEMPLATES_DIR / "main.tex.template",
-                      output_dir / "main.tex")
+        generate_main("All Years", TEMPLATES_DIR / "main.tex.template", output_dir / "main.tex")
 
         # Verify files exist
         assert (output_dir / "preamble.tex").exists()
@@ -235,8 +254,19 @@ def cached(tmp_path, sample_record):
 def _run(data_dir, out_dir, *extra):
     from compose_cv import main
 
-    main(["--orcid", ORCID, "--data-dir", str(data_dir), "--output-dir", str(out_dir),
-          "--no-fetch", "--skip-compile", *extra])
+    main(
+        [
+            "--orcid",
+            ORCID,
+            "--data-dir",
+            str(data_dir),
+            "--output-dir",
+            str(out_dir),
+            "--no-fetch",
+            "--skip-compile",
+            *extra,
+        ]
+    )
 
 
 class TestComposeRuns:
@@ -289,6 +319,7 @@ class TestComposeRuns:
 
     def test_fetch_error_exits_2(self, tmp_path, monkeypatch):
         import compose_cv
+
         from academia_orcid.fetch import OrcidFetchError
 
         def fail(*_args, **_kwargs):
@@ -296,8 +327,17 @@ class TestComposeRuns:
 
         monkeypatch.setattr(compose_cv, "get_or_fetch_orcid_record", fail)
         with pytest.raises(SystemExit) as exc:
-            compose_cv.main(["--orcid", ORCID, "--data-dir", str(tmp_path),
-                             "--output-dir", str(tmp_path / "out"), "--skip-compile"])
+            compose_cv.main(
+                [
+                    "--orcid",
+                    ORCID,
+                    "--data-dir",
+                    str(tmp_path),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--skip-compile",
+                ]
+            )
         assert exc.value.code == 2
 
     def test_docx_is_retired(self, cached, tmp_path):
@@ -321,13 +361,14 @@ class TestComposeRuns:
 # Tests: BibTeX pipeline
 # ---------------------------------------------------------------------------
 
+
 class TestBibtexPipeline:
     """Test BibTeX CV generation."""
 
     def test_generates_bib_file(self, sample_record, tmp_path):
         """Verify that the BibTeX pipeline creates a valid .bib file."""
-        from academia_orcid.extract import extract_publications
         from academia_orcid.bibtex_export import export_bibtex
+        from academia_orcid.extract import extract_publications
 
         output_dir = tmp_path / "bibtex_output"
         output_dir.mkdir()
@@ -355,11 +396,11 @@ class TestBibtexPipeline:
 
     def test_period_filter_applied(self, sample_record):
         """The period filter works with BibTeX export pipeline."""
+        from academia_orcid.bibtex_export import export_bibtex
         from academia_orcid.extract import (
             extract_publications,
             filter_publications_by_period,
         )
-        from academia_orcid.bibtex_export import export_bibtex
         from academia_orcid.periods import period_from_flag
 
         journal, conf, other = extract_publications(sample_record)

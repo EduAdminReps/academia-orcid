@@ -10,8 +10,10 @@ from academia_orcid import prefetch as pf
 from academia_orcid.fetch import OrcidFetchError
 
 FRESH = {"cached_at": datetime.now(timezone.utc).isoformat(), "ttl_seconds": 604800}
-STALE = {"cached_at": (datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
-         "ttl_seconds": 604800}
+STALE = {
+    "cached_at": (datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+    "ttl_seconds": 604800,
+}
 TTL = 7 * 24 * 60 * 60
 
 
@@ -23,10 +25,14 @@ def _db(tmp_path, rows):
     conn.execute(
         "CREATE TABLE faculty_identifiers (UIN TEXT, Scheme TEXT, Identifier TEXT, Rank INTEGER)"
     )
-    conn.executemany("INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, 1)",
-                     [(uin, orcid) for uin, orcid in rows if orcid is not None])
-    conn.executemany("INSERT INTO faculty_identifiers VALUES (?, 'scholars_tamu', ?, 1)",
-                     [(uin, f"n{uin}") for uin, _ in rows])
+    conn.executemany(
+        "INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, 1)",
+        [(uin, orcid) for uin, orcid in rows if orcid is not None],
+    )
+    conn.executemany(
+        "INSERT INTO faculty_identifiers VALUES (?, 'scholars_tamu', ?, 1)",
+        [(uin, f"n{uin}") for uin, _ in rows],
+    )
     conn.commit()
     conn.close()
     return path
@@ -41,23 +47,29 @@ def _cache(data_dir, orcid, metadata):
 
 class TestLoadMappedOrcids:
     def test_skips_blank_and_dedupes(self, tmp_path):
-        db = _db(tmp_path, [
-            ("222222222", "0000-0002-0000-0002"),
-            ("111111111", " 0000-0001-0000-0001 "),
-            ("333333333", ""),
-            ("444444444", None),
-            ("555555555", "0000-0001-0000-0001"),  # same ORCID as 111111111
-        ])
+        db = _db(
+            tmp_path,
+            [
+                ("222222222", "0000-0002-0000-0002"),
+                ("111111111", " 0000-0001-0000-0001 "),
+                ("333333333", ""),
+                ("444444444", None),
+                ("555555555", "0000-0001-0000-0001"),  # same ORCID as 111111111
+            ],
+        )
         assert pf.load_mapped_orcids(db) == [
             ("111111111", "0000-0001-0000-0001"),
             ("222222222", "0000-0002-0000-0002"),
         ]
 
     def test_uin_filter(self, tmp_path):
-        db = _db(tmp_path, [
-            ("111111111", "0000-0001-0000-0001"),
-            ("222222222", "0000-0002-0000-0002"),
-        ])
+        db = _db(
+            tmp_path,
+            [
+                ("111111111", "0000-0001-0000-0001"),
+                ("222222222", "0000-0002-0000-0002"),
+            ],
+        )
         assert pf.load_mapped_orcids(db, ["222222222"]) == [("222222222", "0000-0002-0000-0002")]
 
 
@@ -94,8 +106,11 @@ class TestPrefetch:
     def test_fetches_missing_and_stale_skips_fresh(self, tmp_path, calls):
         _cache(tmp_path, "0000-0001-0000-0001", FRESH)
         _cache(tmp_path, "0000-0002-0000-0002", STALE)
-        pairs = [("1", "0000-0001-0000-0001"), ("2", "0000-0002-0000-0002"),
-                 ("3", "0000-0003-0000-0003")]
+        pairs = [
+            ("1", "0000-0001-0000-0001"),
+            ("2", "0000-0002-0000-0002"),
+            ("3", "0000-0003-0000-0003"),
+        ]
         counts = pf.prefetch(pairs, tmp_path)
         assert calls == ["0000-0002-0000-0002", "0000-0003-0000-0003"]
         assert counts["fetched"] == 2 and counts["fresh"] == 1
@@ -179,9 +194,14 @@ class TestScope:
 
     def test_department_uins_uses_latest_term(self, tmp_path):
         db = _db(tmp_path, [])
-        _census(db, [("202611", "999999999", "MEEN"),
-                     ("202631", "111111111", "MEEN"),
-                     ("202631", "222222222", "ECEN")])
+        _census(
+            db,
+            [
+                ("202611", "999999999", "MEEN"),
+                ("202631", "111111111", "MEEN"),
+                ("202631", "222222222", "ECEN"),
+            ],
+        )
         assert pf.department_uins(db, ["meen"]) == ["111111111"]
         with pytest.raises(ValueError):
             pf.department_uins(db, ["XXXX"])
@@ -192,7 +212,11 @@ class TestScope:
         f = tmp_path / "uins.txt"
         f.write_text("333333333\n")
         assert pf.selected_uins(db) is None
-        assert pf.selected_uins(db, ["111111111"], f, ["ECEN"]) == ["111111111", "222222222", "333333333"]
+        assert pf.selected_uins(db, ["111111111"], f, ["ECEN"]) == [
+            "111111111",
+            "222222222",
+            "333333333",
+        ]
 
     def test_empty_scope_selects_nobody(self, tmp_path):
         db = _db(tmp_path, [("111111111", "0000-0001-0000-0001")])

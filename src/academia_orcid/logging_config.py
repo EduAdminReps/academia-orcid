@@ -6,9 +6,7 @@ from pathlib import Path
 
 
 def setup_logging(
-    level: str = "INFO",
-    log_file: Path | None = None,
-    format_string: str | None = None
+    level: str = "INFO", log_file: Path | None = None, format_string: str | None = None
 ) -> logging.Logger:
     """Configure logging for academia-orcid.
 

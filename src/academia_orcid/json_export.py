@@ -48,16 +48,18 @@ def export_data(
         Dict ready for JSON serialization, or empty dict if no data found.
         An empty dict means "no data" (successful extraction, no content).
     """
-    has_content = any([
-        biography,
-        external_identifiers,
-        fundings,
-        employments,
-        educations,
-        distinctions,
-        memberships,
-        services,
-    ])
+    has_content = any(
+        [
+            biography,
+            external_identifiers,
+            fundings,
+            employments,
+            educations,
+            distinctions,
+            memberships,
+            services,
+        ]
+    )
 
     if not has_content:
         return {}

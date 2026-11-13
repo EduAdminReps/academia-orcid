@@ -32,7 +32,7 @@ class OrcidFetchError(Exception):
 logger = logging.getLogger("academia_orcid.fetch")
 
 # SECURITY: ORCID ID format validation to prevent path traversal
-_ORCID_ID_PATTERN = re.compile(r'^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$')
+_ORCID_ID_PATTERN = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
 
 # Default cache TTL (Time To Live) in seconds: 7 days
 # NOTE: This is now configurable via Config, but kept for backward compatibility
@@ -229,7 +229,9 @@ def fetch_work_details(orcid_id: str, put_code: str, max_retries: int | None = N
             else:
                 return None
         except (requests.RequestException, requests.Timeout) as e:
-            logger.warning(f"Network error fetching work {put_code} (attempt {attempt + 1}/{max_retries}): {type(e).__name__}")
+            logger.warning(
+                f"Network error fetching work {put_code} (attempt {attempt + 1}/{max_retries}): {type(e).__name__}"
+            )
             if attempt < max_retries - 1:
                 time.sleep(delay)
                 delay *= 2
@@ -243,7 +245,7 @@ def fetch_work_details_concurrent(
     orcid_id: str,
     put_codes: list[str],
     max_workers: int | None = None,
-    rate_limit_delay: float = 0.3
+    rate_limit_delay: float = 0.3,
 ) -> dict[str, dict]:
     """Fetch multiple work details concurrently.
 
@@ -277,8 +279,7 @@ def fetch_work_details_concurrent(
         # Fetch batch concurrently
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_code = {
-                executor.submit(fetch_work_details, orcid_id, code): code
-                for code in batch_codes
+                executor.submit(fetch_work_details, orcid_id, code): code for code in batch_codes
             }
 
             for future in as_completed(future_to_code):
@@ -340,9 +341,7 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path) -> dict | None:
         ) from e
 
     if response.status_code != 200:
-        raise OrcidFetchError(
-            f"ORCID API returned HTTP {response.status_code} for {orcid_id}"
-        )
+        raise OrcidFetchError(f"ORCID API returned HTTP {response.status_code} for {orcid_id}")
 
     try:
         record = response.json()
@@ -376,7 +375,7 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path) -> dict | None:
                 orcid_id,
                 put_codes,
                 max_workers=config.max_concurrent_requests,
-                rate_limit_delay=config.rate_limit_delay
+                rate_limit_delay=config.rate_limit_delay,
             )
 
             # Update work summaries with detailed information
@@ -413,7 +412,7 @@ def get_or_fetch_orcid_record(
     orcid_id: str,
     fetch: bool = True,
     force: bool = False,
-    cache_ttl: int | None = None
+    cache_ttl: int | None = None,
 ) -> dict | None:
     """Get ORCID record from cache, or fetch from API if not found.
 

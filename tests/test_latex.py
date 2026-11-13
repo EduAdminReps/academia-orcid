@@ -9,7 +9,6 @@ from academia_orcid.latex import (
     sanitize_url_for_latex,
 )
 
-
 # ── escape_latex ───────────────────────────────────────────────────────────
 
 
@@ -67,10 +66,24 @@ def test_format_date_range_empty():
 
 
 def test_generate_latex_publications():
-    journals = [{"year": "2024", "authors": "Smith, A.", "title": "Test Paper",
-                 "venue": "IEEE TSP", "doi": "10.1109/test"}]
-    conferences = [{"year": "2023", "authors": "Jones, B.", "title": "Conf Paper",
-                    "venue": "ICASSP", "doi": ""}]
+    journals = [
+        {
+            "year": "2024",
+            "authors": "Smith, A.",
+            "title": "Test Paper",
+            "venue": "IEEE TSP",
+            "doi": "10.1109/test",
+        }
+    ]
+    conferences = [
+        {
+            "year": "2023",
+            "authors": "Jones, B.",
+            "title": "Conf Paper",
+            "venue": "ICASSP",
+            "doi": "",
+        }
+    ]
     result = generate_latex("0000-0001-2345-6789", journals, conferences, [])
 
     assert r"\section{" not in result  # the composer template writes it (ORC-03)
@@ -104,15 +117,37 @@ def test_generate_data_latex_sections():
         orcid_id="0000-0001-2345-6789",
         biography="A researcher.",
         external_identifiers=[{"type": "Scopus", "value": "123", "url": ""}],
-        fundings=[{"title": "Grant", "organization": "NSF", "type": "grant",
-                   "start_year": "2022", "end_year": "2025"}],
-        employments=[{"role": "Prof", "department": "ECE", "organization": "TAMU",
-                      "location": "TX", "start_year": "2020", "end_year": ""}],
+        fundings=[
+            {
+                "title": "Grant",
+                "organization": "NSF",
+                "type": "grant",
+                "start_year": "2022",
+                "end_year": "2025",
+            }
+        ],
+        employments=[
+            {
+                "role": "Prof",
+                "department": "ECE",
+                "organization": "TAMU",
+                "location": "TX",
+                "start_year": "2020",
+                "end_year": "",
+            }
+        ],
         educations=[],
         distinctions=[],
-        memberships=[{"role": "Member", "organization": "IEEE",
-                      "start_year": "2018", "end_year": "", "location": "",
-                      "department": ""}],
+        memberships=[
+            {
+                "role": "Member",
+                "organization": "IEEE",
+                "start_year": "2018",
+                "end_year": "",
+                "location": "",
+                "department": "",
+            }
+        ],
         services=[],
     )
 
@@ -168,7 +203,10 @@ def test_sanitize_url_strips_braces():
 
 def test_sanitize_url_strips_backslashes():
     """Backslashes in URLs could inject LaTeX commands."""
-    assert sanitize_url_for_latex("https://example.com/\\input{evil}") == "https://example.com/inputevil"
+    assert (
+        sanitize_url_for_latex("https://example.com/\\input{evil}")
+        == "https://example.com/inputevil"
+    )
 
 
 def test_sanitize_url_empty():
@@ -193,13 +231,19 @@ def test_generate_data_latex_sanitizes_ext_id_url():
     result = generate_data_latex(
         orcid_id="0000-0001-2345-6789",
         biography=None,
-        external_identifiers=[{
-            "type": "Scopus",
-            "value": "12345",
-            "url": "https://scopus.com/}\\input{evil}",
-        }],
-        fundings=[], employments=[], educations=[],
-        distinctions=[], memberships=[], services=[],
+        external_identifiers=[
+            {
+                "type": "Scopus",
+                "value": "12345",
+                "url": "https://scopus.com/}\\input{evil}",
+            }
+        ],
+        fundings=[],
+        employments=[],
+        educations=[],
+        distinctions=[],
+        memberships=[],
+        services=[],
     )
     # The URL should be sanitized - no raw backslash or braces from the URL
     assert "\\input" not in result or "\\href{https://scopus.com/inputevil}" in result
@@ -210,13 +254,19 @@ def test_generate_data_latex_rejects_non_http_ext_id():
     result = generate_data_latex(
         orcid_id="0000-0001-2345-6789",
         biography=None,
-        external_identifiers=[{
-            "type": "Scopus",
-            "value": "12345",
-            "url": "javascript:alert(1)",
-        }],
-        fundings=[], employments=[], educations=[],
-        distinctions=[], memberships=[], services=[],
+        external_identifiers=[
+            {
+                "type": "Scopus",
+                "value": "12345",
+                "url": "javascript:alert(1)",
+            }
+        ],
+        fundings=[],
+        employments=[],
+        educations=[],
+        distinctions=[],
+        memberships=[],
+        services=[],
     )
     # The ORCID profile \href is always present; check the ext_id line specifically
     assert "\\item Scopus: 12345" in result

@@ -63,7 +63,7 @@ def validate_uin(uin: str) -> bool:
     """
     if not uin or not isinstance(uin, str):
         return False
-    return bool(re.match(r'^\d{9}$', uin))
+    return bool(re.match(r"^\d{9}$", uin))
 
 
 def resolve_period(args: argparse.Namespace) -> Period:
@@ -89,32 +89,42 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     add_period_args(parser)  # publications only; ignored for --section data
     fetch_group = parser.add_mutually_exclusive_group()
     fetch_group.add_argument(
-        "--fetch", dest="fetch", action="store_true", default=True,
+        "--fetch",
+        dest="fetch",
+        action="store_true",
+        default=True,
         help="Fetch ORCID record from API if not in cache (default)",
     )
     fetch_group.add_argument(
-        "--no-fetch", dest="fetch", action="store_false",
+        "--no-fetch",
+        dest="fetch",
+        action="store_false",
         help="Do not fetch from API, only use cached records",
     )
     fetch_group.add_argument(
-        "--force-fetch", action="store_true",
+        "--force-fetch",
+        action="store_true",
         help="Always fetch from API, even if cached record exists (refreshes cache)",
     )
     parser.add_argument(
-        "--mapping-db", default=None,
+        "--mapping-db",
+        default=None,
         help="Path to SQLite database (en.db) with the faculty_identifiers table (required with --uin)",
     )
     parser.add_argument(
-        "--config", default=None,
+        "--config",
+        default=None,
         help="Path to YAML configuration file (optional, defaults to .academia-orcid.yaml)",
     )
     parser.add_argument(
-        "--log-level", default="INFO",
+        "--log-level",
+        default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Logging level (default: INFO)",
     )
     parser.add_argument(
-        "--log-file", default=None,
+        "--log-file",
+        default=None,
         help="Optional log file path (logs to stderr if not specified)",
     )
 
@@ -124,7 +134,9 @@ def setup_from_args(args: argparse.Namespace, logger_name: str) -> logging.Logge
     setup_logging(level=args.log_level, log_file=Path(args.log_file) if args.log_file else None)
     logger = logging.getLogger(logger_name)
     config = get_config(Path(args.config) if args.config else None)
-    logger.debug(f"Using configuration (cache TTL: {config.cache_ttl}s, API timeout: {config.api_timeout}s)")
+    logger.debug(
+        f"Using configuration (cache TTL: {config.cache_ttl}s, API timeout: {config.api_timeout}s)"
+    )
     return logger
 
 
@@ -205,7 +217,7 @@ def main(argv: list[str] | None = None):
         "--section",
         default=SECTION_PUBLICATIONS,
         choices=VALID_SECTIONS,
-        help="Section to generate: publications or data"
+        help="Section to generate: publications or data",
     )
     args = parser.parse_args(argv)
     logger = setup_from_args(args, "academia_orcid.cli")
@@ -220,7 +232,9 @@ def main(argv: list[str] | None = None):
     elif not period.is_all:
         logger.info(f"Period: {period.label()}")
 
-    output_filename = OUTPUT_PUBLICATIONS_TEX if section == SECTION_PUBLICATIONS else OUTPUT_DATA_TEX
+    output_filename = (
+        OUTPUT_PUBLICATIONS_TEX if section == SECTION_PUBLICATIONS else OUTPUT_DATA_TEX
+    )
 
     # An earlier run's summary must not outlive its publications file: the composer
     # template inputs it whenever it exists.
@@ -250,7 +264,9 @@ def main(argv: list[str] | None = None):
             total_after = len(journal_articles) + len(conference_papers) + len(other_publications)
             logger.info(f"Found {total_before} publications, {total_after} in {period.label()}")
         else:
-            logger.info(f"Found {len(journal_articles)} journal articles, {len(conference_papers)} conference papers, {len(other_publications)} other")
+            logger.info(
+                f"Found {len(journal_articles)} journal articles, {len(conference_papers)} conference papers, {len(other_publications)} other"
+            )
 
         # Generate LaTeX
         latex = generate_latex(orcid_id, journal_articles, conference_papers, other_publications)
@@ -265,15 +281,24 @@ def main(argv: list[str] | None = None):
         memberships = extract_memberships(record)
         services = extract_services(record)
 
-        logger.info(f"Found: {len(external_identifiers)} external IDs, {len(fundings)} fundings, "
-                    f"{len(employments)} employments, {len(educations)} educations, "
-                    f"{len(distinctions)} distinctions, {len(memberships)} memberships, "
-                    f"{len(services)} services")
+        logger.info(
+            f"Found: {len(external_identifiers)} external IDs, {len(fundings)} fundings, "
+            f"{len(employments)} employments, {len(educations)} educations, "
+            f"{len(distinctions)} distinctions, {len(memberships)} memberships, "
+            f"{len(services)} services"
+        )
 
         # Generate LaTeX
         latex = generate_data_latex(
-            orcid_id, biography, external_identifiers, fundings,
-            employments, educations, distinctions, memberships, services
+            orcid_id,
+            biography,
+            external_identifiers,
+            fundings,
+            employments,
+            educations,
+            distinctions,
+            memberships,
+            services,
         )
 
     # Don't write file if no data (composer uses file existence to decide inclusion)
@@ -291,7 +316,9 @@ def main(argv: list[str] | None = None):
     if section == SECTION_PUBLICATIONS:
         summary_file = output_path / OUTPUT_PUBLICATIONS_SUMMARY_TEX
         summary_file.write_text(
-            generate_latex_summary(orcid_id, journal_articles, conference_papers, other_publications)
+            generate_latex_summary(
+                orcid_id, journal_articles, conference_papers, other_publications
+            )
         )
         logger.info(f"Generated: {summary_file}")
 

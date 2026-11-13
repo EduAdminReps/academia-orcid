@@ -17,7 +17,6 @@ from academia_orcid.fetch import (
     validate_orcid_id,
 )
 
-
 # ── get_orcid_for_uin (SQLite) ───────────────────────────────────────────
 
 
@@ -64,10 +63,13 @@ def test_get_orcid_for_uin_no_orcid_row(tmp_mapping_db):
 def test_get_orcid_for_uin_takes_rank_1_and_strips(tmp_mapping_db):
     """Several ORCID rows: the lowest Rank wins, whatever the row order (ORC-12)."""
     conn = sqlite3.connect(tmp_mapping_db)
-    conn.executemany("INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, ?)", [
-        ("555000000", "0000-0002-0000-0002", 2),
-        ("555000000", " 0000-0001-0000-0001 ", 1),
-    ])
+    conn.executemany(
+        "INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, ?)",
+        [
+            ("555000000", "0000-0002-0000-0002", 2),
+            ("555000000", " 0000-0001-0000-0001 ", 1),
+        ],
+    )
     conn.commit()
     conn.close()
     assert get_orcid_for_uin(tmp_mapping_db, "555000000") == "0000-0001-0000-0001"
@@ -189,7 +191,7 @@ def test_load_orcid_record_truncated_json(tmp_data_dir):
 # ── API MOCKING: fetch_work_details ───────────────────────────────────────
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_fetch_work_details_success(mock_requests):
     """Test successful work detail fetch."""
     mock_response = Mock()
@@ -204,7 +206,7 @@ def test_fetch_work_details_success(mock_requests):
     mock_requests.get.assert_called_once()
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_fetch_work_details_rate_limit_retry(mock_requests):
     """Test that rate limit (429) triggers retry with exponential backoff."""
     # First call returns 429, second call succeeds
@@ -224,7 +226,7 @@ def test_fetch_work_details_rate_limit_retry(mock_requests):
     assert mock_requests.get.call_count == 2  # Retried once
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_fetch_work_details_max_retries_exceeded(mock_requests):
     """Test that max retries returns None."""
     mock_response = Mock()
@@ -237,10 +239,11 @@ def test_fetch_work_details_max_retries_exceeded(mock_requests):
     assert mock_requests.get.call_count == 3  # All retries exhausted
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_fetch_work_details_network_error(mock_requests):
     """Test handling of network errors with retry."""
     import requests
+
     # First call raises exception, second succeeds
     mock_response_success = Mock()
     mock_response_success.status_code = 200
@@ -248,7 +251,7 @@ def test_fetch_work_details_network_error(mock_requests):
 
     mock_requests.get.side_effect = [
         requests.RequestException("Network error"),
-        mock_response_success
+        mock_response_success,
     ]
     mock_requests.RequestException = requests.RequestException
     mock_requests.Timeout = requests.Timeout
@@ -259,10 +262,11 @@ def test_fetch_work_details_network_error(mock_requests):
     assert mock_requests.get.call_count == 2
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_fetch_work_details_timeout(mock_requests):
     """Test handling of timeout errors."""
     import requests
+
     mock_requests.Timeout = requests.Timeout
     mock_requests.RequestException = requests.RequestException
     mock_requests.get.side_effect = requests.Timeout("Request timed out")
@@ -273,7 +277,7 @@ def test_fetch_work_details_timeout(mock_requests):
     assert mock_requests.get.call_count == 3
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_fetch_work_details_invalid_json_response(mock_requests):
     """Test handling of invalid JSON in API response."""
     mock_response = Mock()
@@ -286,7 +290,7 @@ def test_fetch_work_details_invalid_json_response(mock_requests):
     assert result is None
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_fetch_work_details_404_not_found(mock_requests):
     """Test handling of 404 Not Found."""
     mock_response = Mock()
@@ -298,7 +302,7 @@ def test_fetch_work_details_404_not_found(mock_requests):
     assert result is None
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_fetch_work_details_500_server_error(mock_requests):
     """Test handling of 500 Server Error."""
     mock_response = Mock()
@@ -313,14 +317,14 @@ def test_fetch_work_details_500_server_error(mock_requests):
 # ── API MOCKING: fetch_orcid_record ───────────────────────────────────────
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_fetch_orcid_record_success(mock_requests, tmp_path):
     """Test successful ORCID record fetch with caching."""
     mock_response = Mock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
         "person": {"name": "Test Person"},
-        "activities-summary": {"works": {"group": []}}
+        "activities-summary": {"works": {"group": []}},
     }
     mock_requests.get.return_value = mock_response
 
@@ -339,7 +343,7 @@ def test_fetch_orcid_record_success(mock_requests, tmp_path):
     assert cached_data["person"]["name"] == "Test Person"
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_fetch_orcid_record_404(mock_requests, tmp_path):
     """Test that 404 Not Found raises OrcidFetchError."""
     mock_response = Mock()
@@ -350,7 +354,7 @@ def test_fetch_orcid_record_404(mock_requests, tmp_path):
         fetch_orcid_record("0000-0009-9999-9999", tmp_path)
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_fetch_orcid_record_invalid_json(mock_requests, tmp_path):
     """Test handling of invalid JSON in ORCID API response."""
     mock_response = Mock()
@@ -363,10 +367,11 @@ def test_fetch_orcid_record_invalid_json(mock_requests, tmp_path):
     assert result is None
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_fetch_orcid_record_network_error(mock_requests, tmp_path):
     """Test that network errors raise OrcidFetchError."""
     import requests
+
     mock_requests.RequestException = requests.RequestException
     mock_requests.Timeout = requests.Timeout
     mock_requests.get.side_effect = requests.RequestException("Network down")
@@ -375,7 +380,7 @@ def test_fetch_orcid_record_network_error(mock_requests, tmp_path):
         fetch_orcid_record("0000-0001-2345-6789", tmp_path)
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_fetch_orcid_record_with_works(mock_requests, tmp_path):
     """Test fetch with works that require detail fetching."""
     # Mock main record fetch
@@ -386,14 +391,10 @@ def test_fetch_orcid_record_with_works(mock_requests, tmp_path):
         "activities-summary": {
             "works": {
                 "group": [
-                    {
-                        "work-summary": [
-                            {"put-code": 123, "title": {"title": {"value": "Summary"}}}
-                        ]
-                    }
+                    {"work-summary": [{"put-code": 123, "title": {"title": {"value": "Summary"}}}]}
                 ]
             }
-        }
+        },
     }
 
     # Mock work detail fetch
@@ -401,7 +402,7 @@ def test_fetch_orcid_record_with_works(mock_requests, tmp_path):
     work_detail_response.status_code = 200
     work_detail_response.json.return_value = {
         "title": {"title": {"value": "Full Detail"}},
-        "type": "journal-article"
+        "type": "journal-article",
     }
 
     mock_requests.get.side_effect = [main_response, work_detail_response]
@@ -419,10 +420,14 @@ def test_fetch_orcid_record_with_works(mock_requests, tmp_path):
 def _main_record(put_codes):
     return {
         "person": {},
-        "activities-summary": {"works": {"group": [
-            {"work-summary": [{"put-code": pc, "title": {"title": {"value": f"S{pc}"}}}]}
-            for pc in put_codes
-        ]}},
+        "activities-summary": {
+            "works": {
+                "group": [
+                    {"work-summary": [{"put-code": pc, "title": {"title": {"value": f"S{pc}"}}}]}
+                    for pc in put_codes
+                ]
+            }
+        },
     }
 
 
@@ -433,7 +438,7 @@ def _response(status, payload=None):
     return r
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_cache_write_replaces_the_file_whole(mock_requests, tmp_path):
     cache = tmp_path / "ORCID_JSON" / "0000-0001-2345-6789.json"
     cache.parent.mkdir()
@@ -446,7 +451,7 @@ def test_cache_write_replaces_the_file_whole(mock_requests, tmp_path):
     assert list(cache.parent.iterdir()) == [cache]  # no temporary file left
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_interrupted_cache_write_keeps_the_old_file(mock_requests, tmp_path, monkeypatch):
     from academia_orcid import fetch
 
@@ -464,7 +469,7 @@ def test_interrupted_cache_write_keeps_the_old_file(mock_requests, tmp_path, mon
     assert json.loads(cache.read_text()) == {"old": True}
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_missing_work_details_make_the_record_stale(mock_requests, tmp_path):
     detail = {"title": {"title": {"value": "Full"}}, "type": "journal-article"}
 
@@ -483,7 +488,7 @@ def test_missing_work_details_make_the_record_stale(mock_requests, tmp_path):
     assert missing_work_details(cached) == 1
 
 
-@patch('academia_orcid.fetch.requests')
+@patch("academia_orcid.fetch.requests")
 def test_complete_record_is_fresh(mock_requests, tmp_path):
     detail = {"title": {"title": {"value": "Full"}}, "type": "journal-article"}
 
@@ -502,14 +507,14 @@ def test_complete_record_is_fresh(mock_requests, tmp_path):
 # ── API MOCKING: requests unavailable ─────────────────────────────────────
 
 
-@patch('academia_orcid.fetch.REQUESTS_AVAILABLE', False)
+@patch("academia_orcid.fetch.REQUESTS_AVAILABLE", False)
 def test_fetch_work_details_no_requests_library():
     """Test that fetch returns None when requests library unavailable."""
     result = fetch_work_details("0000-0001-2345-6789", "12345")
     assert result is None
 
 
-@patch('academia_orcid.fetch.REQUESTS_AVAILABLE', False)
+@patch("academia_orcid.fetch.REQUESTS_AVAILABLE", False)
 def test_fetch_orcid_record_no_requests_library(tmp_path, caplog):
     """Test handling when requests library is not available."""
     result = fetch_orcid_record("0000-0001-2345-6789", tmp_path)

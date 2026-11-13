@@ -1,11 +1,8 @@
 """Tests for JSON export functionality."""
 
-from datetime import datetime, timezone
-
-import pytest
+from datetime import datetime
 
 from academia_orcid.json_export import _clean_pub, export_data, export_publications
-
 
 # ── export_publications ───────────────────────────────────────────────────
 
@@ -13,14 +10,38 @@ from academia_orcid.json_export import _clean_pub, export_data, export_publicati
 def test_export_publications_all_categories():
     """Test export with all publication categories present."""
     journals = [
-        {"title": "Journal Paper 1", "year": "2024", "doi": "10.1000/j1", "authors": "A. Smith", "venue": "Nature"},
-        {"title": "Journal Paper 2", "year": "2023", "doi": "", "authors": "B. Jones", "venue": "Science"},
+        {
+            "title": "Journal Paper 1",
+            "year": "2024",
+            "doi": "10.1000/j1",
+            "authors": "A. Smith",
+            "venue": "Nature",
+        },
+        {
+            "title": "Journal Paper 2",
+            "year": "2023",
+            "doi": "",
+            "authors": "B. Jones",
+            "venue": "Science",
+        },
     ]
     conferences = [
-        {"title": "Conference Paper", "year": "2024", "doi": "10.1000/c1", "authors": "C. Lee", "venue": "ICML"},
+        {
+            "title": "Conference Paper",
+            "year": "2024",
+            "doi": "10.1000/c1",
+            "authors": "C. Lee",
+            "venue": "ICML",
+        },
     ]
     other = [
-        {"title": "Book Chapter", "year": "2022", "doi": "", "authors": "D. Wang", "venue": "Springer"},
+        {
+            "title": "Book Chapter",
+            "year": "2022",
+            "doi": "",
+            "authors": "D. Wang",
+            "venue": "Springer",
+        },
     ]
 
     result = export_publications("0000-0001-2345-6789", journals, conferences, other)
@@ -48,7 +69,9 @@ def test_export_publications_empty_lists():
 
 def test_export_publications_partial_data():
     """Test export with only some categories populated."""
-    journals = [{"title": "Paper", "year": "2024", "doi": "", "authors": "Smith", "venue": "Journal"}]
+    journals = [
+        {"title": "Paper", "year": "2024", "doi": "", "authors": "Smith", "venue": "Journal"}
+    ]
     conferences = []
     other = []
 
@@ -63,7 +86,13 @@ def test_export_publications_partial_data():
 def test_export_publications_title_cleaning():
     """Test that publication titles are cleaned (HTML stripped, Unicode normalized)."""
     journals = [
-        {"title": "<i>Italic</i> title with <sub>subscript</sub>", "year": "2024", "doi": "", "authors": "Smith", "venue": "J"},
+        {
+            "title": "<i>Italic</i> title with <sub>subscript</sub>",
+            "year": "2024",
+            "doi": "",
+            "authors": "Smith",
+            "venue": "J",
+        },
     ]
 
     result = export_publications("0000-0001-2345-6789", journals, [], [])
@@ -96,7 +125,14 @@ def test_export_publications_metadata_structure():
 def test_export_publications_preserves_all_fields():
     """Test that all publication fields are preserved in export."""
     journals = [
-        {"title": "Title", "year": "2024", "doi": "10.1000/j1", "authors": "Smith, A.", "venue": "Nature", "extra": "data"},
+        {
+            "title": "Title",
+            "year": "2024",
+            "doi": "10.1000/j1",
+            "authors": "Smith, A.",
+            "venue": "Nature",
+            "extra": "data",
+        },
     ]
 
     result = export_publications("0000-0001-2345-6789", journals, [], [])
@@ -117,9 +153,27 @@ def test_export_data_all_fields():
     """Test export with all data fields populated."""
     biography = "Researcher at <b>Texas A&M</b>"
     external_ids = [{"type": "Scopus", "value": "123456"}]
-    fundings = [{"title": "Grant", "organization": "NSF", "type": "grant", "start_year": "2022", "end_year": "2025"}]
-    employments = [{"organization": "TAMU", "role": "Professor", "department": "CS", "start_year": "2020"}]
-    educations = [{"organization": "MIT", "role": "PhD", "department": "EECS", "start_year": "2015", "end_year": "2020"}]
+    fundings = [
+        {
+            "title": "Grant",
+            "organization": "NSF",
+            "type": "grant",
+            "start_year": "2022",
+            "end_year": "2025",
+        }
+    ]
+    employments = [
+        {"organization": "TAMU", "role": "Professor", "department": "CS", "start_year": "2020"}
+    ]
+    educations = [
+        {
+            "organization": "MIT",
+            "role": "PhD",
+            "department": "EECS",
+            "start_year": "2015",
+            "end_year": "2020",
+        }
+    ]
     distinctions = [{"organization": "IEEE", "role": "Fellow", "start_year": "2022"}]
     memberships = [{"organization": "ACM", "role": "Member", "start_year": "2018"}]
     services = [{"organization": "IEEE Trans", "role": "Editor", "start_year": "2021"}]
@@ -133,7 +187,7 @@ def test_export_data_all_fields():
         educations,
         distinctions,
         memberships,
-        services
+        services,
     )
 
     assert result["_meta"]["section"] == "orcid-data"
@@ -273,7 +327,15 @@ def test_clean_pub_handles_missing_title():
 
 def test_export_publications_unicode_characters():
     """Test that Unicode characters in titles are preserved."""
-    journals = [{"title": "Übersetzung of Résumé über Ångström", "year": "2024", "doi": "", "authors": "Schmidt", "venue": "J"}]
+    journals = [
+        {
+            "title": "Übersetzung of Résumé über Ångström",
+            "year": "2024",
+            "doi": "",
+            "authors": "Schmidt",
+            "venue": "J",
+        }
+    ]
 
     result = export_publications("0000-0001-2345-6789", journals, [], [])
 
@@ -308,7 +370,9 @@ def test_export_data_empty_biography_string():
     """Test handling of empty string biography."""
     biography = ""
 
-    result = export_data("0000-0001-2345-6789", biography, [], [], [{"org": "TAMU"}], [], [], [], [])
+    result = export_data(
+        "0000-0001-2345-6789", biography, [], [], [{"org": "TAMU"}], [], [], [], []
+    )
 
     # Empty string is falsy, but should be treated as no content for biography check
     # However, employments list is not empty, so export should happen

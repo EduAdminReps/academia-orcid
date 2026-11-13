@@ -85,7 +85,8 @@ def read_uin_file(path: Path) -> list[str]:
     CSV whose header has a ``UIN`` column (other columns ignored).
     """
     lines = [
-        ln.strip() for ln in Path(path).read_text().splitlines()
+        ln.strip()
+        for ln in Path(path).read_text().splitlines()
         if ln.strip() and not ln.strip().startswith("#")
     ]
     if not lines:
@@ -223,26 +224,46 @@ def main(argv: list[str] | None = None, default_data_dir: Path | None = None) ->
     parser = argparse.ArgumentParser(
         description="Download every mapped ORCID record into the local cache."
     )
-    parser.add_argument("--mapping-db", required=True,
-                        help="SQLite database with the faculty_identifiers table (en.db)")
-    parser.add_argument("--data-dir", default=str(default_data_dir or "."),
-                        help="Base directory holding ORCID_JSON/ (default: repo root)")
-    parser.add_argument("--uin", action="append", default=None,
-                        help="Only this UIN (repeatable); default: every mapped UIN")
-    parser.add_argument("--uin-file", default=None,
-                        help="Only the UINs in this file (one per line, or a CSV with a UIN column)")
-    parser.add_argument("--dept", action="append", default=None,
-                        help="Only current faculty of this department (latest faculty_census term; repeatable)")
-    parser.add_argument("--force", action="store_true",
-                        help="Download every record, even fresh ones")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="List what would be downloaded, download nothing")
-    parser.add_argument("--delay", type=float, default=0.2,
-                        help="Seconds to pause between people (default: 0.2)")
-    parser.add_argument("--config", default=None,
-                        help="Path to YAML configuration file (optional)")
-    parser.add_argument("--log-level", default="INFO",
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+    parser.add_argument(
+        "--mapping-db",
+        required=True,
+        help="SQLite database with the faculty_identifiers table (en.db)",
+    )
+    parser.add_argument(
+        "--data-dir",
+        default=str(default_data_dir or "."),
+        help="Base directory holding ORCID_JSON/ (default: repo root)",
+    )
+    parser.add_argument(
+        "--uin",
+        action="append",
+        default=None,
+        help="Only this UIN (repeatable); default: every mapped UIN",
+    )
+    parser.add_argument(
+        "--uin-file",
+        default=None,
+        help="Only the UINs in this file (one per line, or a CSV with a UIN column)",
+    )
+    parser.add_argument(
+        "--dept",
+        action="append",
+        default=None,
+        help="Only current faculty of this department (latest faculty_census term; repeatable)",
+    )
+    parser.add_argument(
+        "--force", action="store_true", help="Download every record, even fresh ones"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="List what would be downloaded, download nothing"
+    )
+    parser.add_argument(
+        "--delay", type=float, default=0.2, help="Seconds to pause between people (default: 0.2)"
+    )
+    parser.add_argument("--config", default=None, help="Path to YAML configuration file (optional)")
+    parser.add_argument(
+        "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+    )
     args = parser.parse_args(argv)
 
     setup_logging(level=args.log_level)
@@ -271,8 +292,7 @@ def main(argv: list[str] | None = None, default_data_dir: Path | None = None) ->
     logger.info(f"{len(pairs)} mapped ORCID iDs; cache: {data_dir / get_config().cache_dir_name}")
 
     try:
-        counts = prefetch(pairs, data_dir, force=args.force, dry_run=args.dry_run,
-                          delay=args.delay)
+        counts = prefetch(pairs, data_dir, force=args.force, dry_run=args.dry_run, delay=args.delay)
     except KeyboardInterrupt:
         logger.warning("Interrupted; records already written are kept. Rerun to resume.")
         return 130

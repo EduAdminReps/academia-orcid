@@ -30,12 +30,11 @@ from academia_orcid.extract import (
 
 def main(argv: list[str] | None = None):
     """Generate ORCID BibTeX export for a faculty member."""
-    parser = argparse.ArgumentParser(
-        description="Export ORCID publications as BibTeX (.bib)."
-    )
+    parser = argparse.ArgumentParser(description="Export ORCID publications as BibTeX (.bib).")
     add_common_args(parser)
     parser.add_argument(
-        "--enrich", action="store_true",
+        "--enrich",
+        action="store_true",
         help="Enrich publications via DOI content negotiation (fills gaps)",
     )
     args = parser.parse_args(argv)
@@ -63,12 +62,15 @@ def main(argv: list[str] | None = None):
     # Optional DOI enrichment
     if args.enrich:
         from academia_orcid.enrich import enrich_publications
+
         logger.info("Enriching publications via DOI content negotiation...")
         journal_articles = enrich_publications(journal_articles)
         conference_papers = enrich_publications(conference_papers)
         other_publications = enrich_publications(other_publications)
 
-    bibtex_content = export_bibtex(orcid_id, journal_articles, conference_papers, other_publications)
+    bibtex_content = export_bibtex(
+        orcid_id, journal_articles, conference_papers, other_publications
+    )
 
     if not bibtex_content:
         logger.info("No publications found; skipping .bib file creation.")

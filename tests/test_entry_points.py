@@ -36,11 +36,16 @@ def entry(request):
 def db(tmp_path):
     path = tmp_path / "en.db"
     conn = sqlite3.connect(path)
-    conn.execute("CREATE TABLE faculty_identifiers (UIN TEXT, Scheme TEXT, Identifier TEXT, Rank INTEGER)")
-    conn.executemany("INSERT INTO faculty_identifiers VALUES (?, ?, ?, ?)", [
-        ("123456789", "orcid", ORCID, 1),
-        ("999999999", "scholars_tamu", "n0000001", 1),
-    ])
+    conn.execute(
+        "CREATE TABLE faculty_identifiers (UIN TEXT, Scheme TEXT, Identifier TEXT, Rank INTEGER)"
+    )
+    conn.executemany(
+        "INSERT INTO faculty_identifiers VALUES (?, ?, ?, ?)",
+        [
+            ("123456789", "orcid", ORCID, 1),
+            ("999999999", "scholars_tamu", "n0000001", 1),
+        ],
+    )
     conn.commit()
     conn.close()
     return path
@@ -65,21 +70,40 @@ def test_writes_the_section(entry, tmp_path, data_dir):
 
 def test_uin_via_en_db(entry, tmp_path, data_dir, db):
     main, filename = entry
-    main(_args(tmp_path / "out", data_dir, "--uin", "123456789", "--mapping-db", str(db), "--no-fetch"))
+    main(
+        _args(
+            tmp_path / "out", data_dir, "--uin", "123456789", "--mapping-db", str(db), "--no-fetch"
+        )
+    )
     assert (tmp_path / "out" / filename).exists()
 
 
 def test_uin_without_orcid_is_no_data(entry, tmp_path, data_dir, db):
     main, _ = entry
-    main(_args(tmp_path / "out", data_dir, "--uin", "999999999", "--mapping-db", str(db), "--no-fetch"))
+    main(
+        _args(
+            tmp_path / "out", data_dir, "--uin", "999999999", "--mapping-db", str(db), "--no-fetch"
+        )
+    )
     assert not (tmp_path / "out").exists()
 
 
 def test_uin_and_orcid_together_are_rejected(entry, tmp_path, data_dir, db):
     main, _ = entry
     with pytest.raises(SystemExit) as exc:
-        main(_args(tmp_path / "out", data_dir, "--uin", "123456789", "--orcid", ORCID,
-                   "--mapping-db", str(db), "--no-fetch"))
+        main(
+            _args(
+                tmp_path / "out",
+                data_dir,
+                "--uin",
+                "123456789",
+                "--orcid",
+                ORCID,
+                "--mapping-db",
+                str(db),
+                "--no-fetch",
+            )
+        )
     assert exc.value.code == 2
 
 
@@ -95,7 +119,17 @@ def test_pre_v17_db_exits_1_with_a_message(entry, tmp_path, data_dir, capsys):
     old = tmp_path / "old.db"
     sqlite3.connect(old).close()
     with pytest.raises(SystemExit) as exc:
-        main(_args(tmp_path / "out", data_dir, "--uin", "123456789", "--mapping-db", str(old), "--no-fetch"))
+        main(
+            _args(
+                tmp_path / "out",
+                data_dir,
+                "--uin",
+                "123456789",
+                "--mapping-db",
+                str(old),
+                "--no-fetch",
+            )
+        )
     assert exc.value.code == 1
     assert "schema v17" in capsys.readouterr().err
 

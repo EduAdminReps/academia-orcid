@@ -13,10 +13,10 @@ from academia_orcid.enrich import (
     fetch_doi_metadata,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def csl_response():
@@ -84,6 +84,7 @@ def complete_pub():
 # Tests: fetch_doi_metadata
 # ---------------------------------------------------------------------------
 
+
 class TestFetchDoiMetadata:
     """Test DOI content negotiation requests."""
 
@@ -106,6 +107,7 @@ class TestFetchDoiMetadata:
     @patch("academia_orcid.enrich.requests.get")
     def test_timeout(self, mock_get):
         import requests as req
+
         mock_get.side_effect = req.exceptions.Timeout("timed out")
 
         result = fetch_doi_metadata("10.1109/TSP.2024.001", timeout=5)
@@ -114,11 +116,10 @@ class TestFetchDoiMetadata:
     @patch("academia_orcid.enrich.requests.get")
     def test_http_404(self, mock_get):
         import requests as req
+
         mock_resp = MagicMock()
         mock_resp.status_code = 404
-        mock_resp.raise_for_status.side_effect = req.exceptions.HTTPError(
-            response=mock_resp
-        )
+        mock_resp.raise_for_status.side_effect = req.exceptions.HTTPError(response=mock_resp)
         mock_get.return_value = mock_resp
 
         result = fetch_doi_metadata("10.9999/nonexistent")
@@ -137,6 +138,7 @@ class TestFetchDoiMetadata:
     @patch("academia_orcid.enrich.requests.get")
     def test_connection_error(self, mock_get):
         import requests as req
+
         mock_get.side_effect = req.exceptions.ConnectionError("no network")
 
         result = fetch_doi_metadata("10.1109/TSP.2024.001")
@@ -146,6 +148,7 @@ class TestFetchDoiMetadata:
 # ---------------------------------------------------------------------------
 # Tests: CSL-JSON extraction helpers
 # ---------------------------------------------------------------------------
+
 
 class TestExtractMonthFromCSL:
     """Test month extraction from CSL-JSON."""
@@ -174,10 +177,12 @@ class TestExtractAuthorsFromCSL:
     """Test author extraction from CSL-JSON."""
 
     def test_basic_authors(self):
-        csl = {"author": [
-            {"given": "Alice", "family": "Smith"},
-            {"given": "Bob", "family": "Jones"},
-        ]}
+        csl = {
+            "author": [
+                {"given": "Alice", "family": "Smith"},
+                {"given": "Bob", "family": "Jones"},
+            ]
+        }
         result = _extract_authors_from_csl(csl)
         assert result == ["Alice Smith", "Bob Jones"]
 
@@ -197,11 +202,13 @@ class TestExtractAuthorsFromCSL:
         assert _extract_authors_from_csl(csl) == []
 
     def test_skips_empty_entries(self):
-        csl = {"author": [
-            {"given": "Alice", "family": "Smith"},
-            {},
-            {"given": "Bob", "family": "Jones"},
-        ]}
+        csl = {
+            "author": [
+                {"given": "Alice", "family": "Smith"},
+                {},
+                {"given": "Bob", "family": "Jones"},
+            ]
+        }
         result = _extract_authors_from_csl(csl)
         assert result == ["Alice Smith", "Bob Jones"]
 
@@ -209,6 +216,7 @@ class TestExtractAuthorsFromCSL:
 # ---------------------------------------------------------------------------
 # Tests: enrich_publication (fill-only semantics)
 # ---------------------------------------------------------------------------
+
 
 class TestEnrichPublication:
     """Test single publication enrichment with fill-only semantics."""
@@ -291,6 +299,7 @@ class TestEnrichPublication:
 # Tests: _needs_enrichment
 # ---------------------------------------------------------------------------
 
+
 class TestNeedsEnrichment:
     """Test whether a publication needs enrichment."""
 
@@ -299,9 +308,16 @@ class TestNeedsEnrichment:
         assert _needs_enrichment(pub) is True
 
     def test_needs_enrichment_missing_authors(self):
-        pub = {"venue": "J", "month": "3", "volume": "1", "pages": "1",
-               "number": "1", "publisher": "P", "abstract": "A",
-               "raw_authors": []}
+        pub = {
+            "venue": "J",
+            "month": "3",
+            "volume": "1",
+            "pages": "1",
+            "number": "1",
+            "publisher": "P",
+            "abstract": "A",
+            "raw_authors": [],
+        }
         assert _needs_enrichment(pub) is True
 
     def test_complete_no_enrichment_needed(self, complete_pub):
@@ -315,6 +331,7 @@ class TestNeedsEnrichment:
 # ---------------------------------------------------------------------------
 # Tests: enrich_publications (batch)
 # ---------------------------------------------------------------------------
+
 
 class TestEnrichPublications:
     """Test batch enrichment with mocked network calls."""

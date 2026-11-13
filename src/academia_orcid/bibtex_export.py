@@ -54,11 +54,26 @@ ORCID_TO_BIBTEX_TYPE = {
 }
 
 MONTH_ABBREV = {
-    "01": "jan", "02": "feb", "03": "mar", "04": "apr",
-    "05": "may", "06": "jun", "07": "jul", "08": "aug",
-    "09": "sep", "10": "oct", "11": "nov", "12": "dec",
-    "1": "jan", "2": "feb", "3": "mar", "4": "apr",
-    "5": "may", "6": "jun", "7": "jul", "8": "aug",
+    "01": "jan",
+    "02": "feb",
+    "03": "mar",
+    "04": "apr",
+    "05": "may",
+    "06": "jun",
+    "07": "jul",
+    "08": "aug",
+    "09": "sep",
+    "10": "oct",
+    "11": "nov",
+    "12": "dec",
+    "1": "jan",
+    "2": "feb",
+    "3": "mar",
+    "4": "apr",
+    "5": "may",
+    "6": "jun",
+    "7": "jul",
+    "8": "aug",
     "9": "sep",
 }
 
@@ -256,6 +271,7 @@ def _pub_to_bibtex_entry(pub: dict, cite_key: str) -> str:
 
 # ── Main export ──────────────────────────────────────────────────────────
 
+
 def export_bibtex(
     orcid_id: str,
     journal_articles: list[dict],
@@ -293,8 +309,7 @@ def export_bibtex(
         citation = pub.get("citation")
 
         # Prefer embedded BibTeX from ORCID, if it is BibTeX
-        if (citation and isinstance(citation, dict)
-                and citation.get("citation-type") == "bibtex"):
+        if citation and isinstance(citation, dict) and citation.get("citation-type") == "bibtex":
             bibtex_str = citation.get("citation-value") or ""
             if _is_bibtex_entry(bibtex_str):
                 embedded_key = _extract_cite_key_from_bibtex(bibtex_str)

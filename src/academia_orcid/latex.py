@@ -42,7 +42,7 @@ def _generate_publication_list(lines: list[str], subsection_name: str, publicati
         entry = f"{year}: "
         if authors:
             entry += f"{authors}, "
-        entry += f'``{title}.\'\''
+        entry += f"``{title}.''"
         if venue:
             entry += f" \\textit{{{venue}}}."
 
@@ -100,7 +100,9 @@ def generate_latex_summary(
     return "\n".join(lines)
 
 
-def generate_latex(orcid_id: str, journal_articles: list, conference_papers: list, other_publications: list) -> str:
+def generate_latex(
+    orcid_id: str, journal_articles: list, conference_papers: list, other_publications: list
+) -> str:
     """The publication lists, one subsection per type, with DOI links.
 
     No section heading, profile link or counts: the composer template writes the
@@ -219,7 +221,9 @@ def generate_data_latex(
             title = escape_latex_smart(funding.get("title", ""))
             org = escape_latex(funding.get("organization", ""))
             funding_type = escape_latex(funding.get("type", ""))
-            date_range = format_date_range(funding.get("start_year", ""), funding.get("end_year", ""))
+            date_range = format_date_range(
+                funding.get("start_year", ""), funding.get("end_year", "")
+            )
 
             entry = ""
             if title:

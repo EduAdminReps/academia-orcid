@@ -1,9 +1,8 @@
 """Tests for academia_orcid.extract module."""
 
+import pytest
+
 from academia_orcid.extract import (
-    format_author,
-    normalize_doi,
-    split_name,
     extract_biography,
     extract_distinctions,
     extract_educations,
@@ -14,12 +13,12 @@ from academia_orcid.extract import (
     extract_publications,
     extract_services,
     filter_publications_by_period,
+    format_author,
+    normalize_doi,
+    split_name,
 )
-import pytest
-
 from academia_orcid.periods import ALL, period_from_flag
 from tests.conftest import _make_work
-
 
 # ── filter_publications_by_period ──────────────────────────────────────────
 # Parsing and the meaning of the flags are tested in coe-data-core
@@ -158,9 +157,16 @@ def _record(*groups):
 
 def _work(**fields):
     """A work-summary dict with null where ORCID sends null, wrapped as a group."""
-    work = {"type": "journal-article", "title": {"title": {"value": "A title long enough to compare"}},
-            "publication-date": {"year": {"value": "2024"}}, "external-ids": None,
-            "contributors": None, "journal-title": None, "url": None, "citation": None}
+    work = {
+        "type": "journal-article",
+        "title": {"title": {"value": "A title long enough to compare"}},
+        "publication-date": {"year": {"value": "2024"}},
+        "external-ids": None,
+        "contributors": None,
+        "journal-title": None,
+        "url": None,
+        "citation": None,
+    }
     work.update(fields)
     return {"work-summary": [work]}
 
@@ -197,7 +203,9 @@ def test_author_names_in_either_order(raw, family, formatted):
 
 
 def test_family_first_authors_in_a_work():
-    contributors = {"contributor": [{"credit-name": {"value": n}} for n in ["Doe, Jane A.", "Bo Li"]]}
+    contributors = {
+        "contributor": [{"credit-name": {"value": n}} for n in ["Doe, Jane A.", "Bo Li"]]
+    }
     journals, _, _ = extract_publications(_record(_work(contributors=contributors)))
     assert journals[0]["authors"] == "Doe, J.A., Li, B."
 
@@ -217,17 +225,23 @@ def test_normalize_doi(raw, doi):
 
 
 def _ids(*pairs):
-    return {"external-id": [
-        {"external-id-type": "doi", "external-id-value": v, "external-id-relationship": r}
-        for v, r in pairs
-    ]}
+    return {
+        "external-id": [
+            {"external-id-type": "doi", "external-id-value": v, "external-id-relationship": r}
+            for v, r in pairs
+        ]
+    }
 
 
 def test_doi_is_the_works_own_never_its_books():
     """A chapter lists its book's DOI as part-of; the entry shows the chapter's own (ORC-06)."""
-    chapter = _work(**{"external-ids": _ids(("10.1000/book", "part-of"), ("10.1000/book.ch3", "self"))})
-    only_book = _work(**{"external-ids": _ids(("10.1000/other", "part-of"))},
-                      title={"title": {"value": "Another chapter title of some length"}})
+    chapter = _work(
+        **{"external-ids": _ids(("10.1000/book", "part-of"), ("10.1000/book.ch3", "self"))}
+    )
+    only_book = _work(
+        **{"external-ids": _ids(("10.1000/other", "part-of"))},
+        title={"title": {"value": "Another chapter title of some length"}},
+    )
     journals, _, _ = extract_publications(_record(chapter, only_book))
     assert sorted(p["doi"] for p in journals) == ["", "10.1000/book.ch3"]
 
@@ -235,7 +249,9 @@ def test_doi_is_the_works_own_never_its_books():
 def test_url_form_doi_is_stored_bare():
     work = _work(**{"external-ids": _ids(("https://doi.org/10.1000/abc", "self"))})
     journals, _, _ = extract_publications(_record(work))
-    assert journals[0]["doi"] == "10.1000/abc" and journals[0]["external_ids"]["doi"] == "10.1000/abc"
+    assert (
+        journals[0]["doi"] == "10.1000/abc" and journals[0]["external_ids"]["doi"] == "10.1000/abc"
+    )
 
 
 def test_duplicate_works_are_collapsed():
@@ -243,7 +259,9 @@ def test_duplicate_works_are_collapsed():
     groups = [
         _make_work("journal-article", "Graph learning for power systems", "2024", doi="10.1000/a"),
         _make_work("journal-article", "Graph learning for power systems", "2024"),  # copy, no DOI
-        _make_work("conference-paper", "Graph learning, conference version", "2024", doi="10.1000/A"),
+        _make_work(
+            "conference-paper", "Graph learning, conference version", "2024", doi="10.1000/A"
+        ),
         _make_work("journal-article", "Graph learning for power systems", "2023"),  # other year
         _make_work("journal-article", "Editorial", "2024"),
         _make_work("journal-article", "Editorial", "2024"),  # too short to compare: both kept
@@ -260,8 +278,10 @@ def test_duplicate_works_are_collapsed():
 
 def test_month_narrows_the_period():
     """A 2024 work dated March is Spring 2024: FY2024, not FY2025 (ORC-16)."""
-    pubs = [{"title": "March", "year": "2024", "month": "03"},
-            {"title": "October", "year": "2024", "month": "10"},
-            {"title": "Year only", "year": "2024", "month": ""}]
+    pubs = [
+        {"title": "March", "year": "2024", "month": "03"},
+        {"title": "October", "year": "2024", "month": "10"},
+        {"title": "Year only", "year": "2024", "month": ""},
+    ]
     fy2025 = filter_publications_by_period(pubs, period_from_flag("year", "2025"))
     assert [p["title"] for p in fy2025] == ["October", "Year only"]

@@ -14,6 +14,7 @@ logger = logging.getLogger("academia_orcid.config")
 
 try:
     import yaml
+
     YAML_AVAILABLE = True
 except ImportError:
     YAML_AVAILABLE = False
@@ -68,6 +69,7 @@ class Config:
     def _load_defaults(self) -> dict[str, Any]:
         """Load default configuration."""
         import copy
+
         return copy.deepcopy(DEFAULT_CONFIG)
 
     def _load_from_file(self, config_file: Path) -> None:
@@ -81,7 +83,7 @@ class Config:
             return
 
         try:
-            with open(config_file, 'r') as f:
+            with open(config_file, "r") as f:
                 user_config = yaml.safe_load(f)
 
             if user_config:
@@ -114,9 +116,7 @@ class Config:
 
         # cache.dir_name must be a simple name (no path separators or traversal)
         dir_name = self._config.get("cache", {}).get("dir_name", "")
-        if dir_name and (
-            "/" in dir_name or "\\" in dir_name or ".." in dir_name
-        ):
+        if dir_name and ("/" in dir_name or "\\" in dir_name or ".." in dir_name):
             logger.warning(f"Rejecting unsafe cache.dir_name: {dir_name}")
             self._config["cache"]["dir_name"] = DEFAULT_CONFIG["cache"]["dir_name"]
 

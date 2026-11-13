@@ -5,11 +5,21 @@ import json
 import pytest
 
 
-def _make_work(pub_type, title, year, venue="", doi="", authors=None,
-               month="", url="", citation=None, extra_ids=None):
+def _make_work(
+    pub_type,
+    title,
+    year,
+    venue="",
+    doi="",
+    authors=None,
+    month="",
+    url="",
+    citation=None,
+    extra_ids=None,
+):
     """Helper to build a minimal ORCID work-group entry."""
     contributors = []
-    for name in (authors or []):
+    for name in authors or []:
         contributors.append({"credit-name": {"value": name}})
 
     external_ids = []
@@ -35,22 +45,25 @@ def _make_work(pub_type, title, year, venue="", doi="", authors=None,
     return {"work-summary": [work_summary]}
 
 
-def _make_affiliation(summary_key, org_name, role="", department="",
-                      start_year="", end_year="", city="", country=""):
+def _make_affiliation(
+    summary_key, org_name, role="", department="", start_year="", end_year="", city="", country=""
+):
     """Helper to build a minimal affiliation-group entry."""
     return {
-        "summaries": [{
-            summary_key: {
-                "organization": {
-                    "name": org_name,
-                    "address": {"city": city, "region": "", "country": country},
-                },
-                "role-title": role,
-                "department-name": department,
-                "start-date": {"year": {"value": start_year}} if start_year else None,
-                "end-date": {"year": {"value": end_year}} if end_year else None,
+        "summaries": [
+            {
+                summary_key: {
+                    "organization": {
+                        "name": org_name,
+                        "address": {"city": city, "region": "", "country": country},
+                    },
+                    "role-title": role,
+                    "department-name": department,
+                    "start-date": {"year": {"value": start_year}} if start_year else None,
+                    "end-date": {"year": {"value": end_year}} if end_year else None,
+                }
             }
-        }]
+        ]
     }
 
 
@@ -159,13 +172,15 @@ def sample_record():
             "fundings": {
                 "group": [
                     {
-                        "funding-summary": [{
-                            "title": {"title": {"value": "Research Grant"}},
-                            "organization": {"name": "NSF"},
-                            "type": "grant",
-                            "start-date": {"year": {"value": "2022"}},
-                            "end-date": {"year": {"value": "2025"}},
-                        }],
+                        "funding-summary": [
+                            {
+                                "title": {"title": {"value": "Research Grant"}},
+                                "organization": {"name": "NSF"},
+                                "type": "grant",
+                                "start-date": {"year": {"value": "2022"}},
+                                "end-date": {"year": {"value": "2025"}},
+                            }
+                        ],
                     },
                 ],
             },

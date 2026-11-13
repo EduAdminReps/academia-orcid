@@ -4,12 +4,10 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 
 from academia_orcid import cli
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -23,8 +21,10 @@ def integration_setup(tmp_path, sample_record):
     conn.execute(
         "CREATE TABLE faculty_identifiers (UIN TEXT, Scheme TEXT, Identifier TEXT, Rank INTEGER)"
     )
-    conn.execute("INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, 1)",
-                 ("123456789", "0000-0001-2345-6789"))
+    conn.execute(
+        "INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, 1)",
+        ("123456789", "0000-0001-2345-6789"),
+    )
     conn.commit()
     conn.close()
 
@@ -54,14 +54,22 @@ def test_full_latex_pipeline_with_uin(monkeypatch, integration_setup, capsys):
     """Test complete LaTeX pipeline: UIN → ORCID → extract → LaTeX."""
     setup = integration_setup
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--uin", setup["uin"],
-        "--mapping-db", str(setup["db_path"]),
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--uin",
+            setup["uin"],
+            "--mapping-db",
+            str(setup["db_path"]),
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -85,13 +93,20 @@ def test_full_latex_pipeline_with_orcid(monkeypatch, integration_setup):
     """Test LaTeX pipeline with direct ORCID ID (no UIN mapping)."""
     setup = integration_setup
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            setup["orcid"],
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -106,14 +121,22 @@ def test_full_latex_pipeline_data_section(monkeypatch, integration_setup):
     """Test LaTeX pipeline for data section."""
     setup = integration_setup
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--section", "data",
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            setup["orcid"],
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--section",
+            "data",
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -132,14 +155,22 @@ def test_integration_period_single_calendar_year(monkeypatch, integration_setup,
     """One calendar year keeps only that year's publications."""
     setup = integration_setup
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--cal_year", "2024",
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            setup["orcid"],
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--cal_year",
+            "2024",
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -157,14 +188,22 @@ def test_integration_period_fiscal_year(monkeypatch, integration_setup):
     """--year is a fiscal year (Fall 2023 + Spring 2024): calendar 2023 and 2024 overlap it."""
     setup = integration_setup
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--year", "2024",
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            setup["orcid"],
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--year",
+            "2024",
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -178,14 +217,22 @@ def test_integration_period_range(monkeypatch, integration_setup):
     """A calendar-year range."""
     setup = integration_setup
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--cal_year", "2023-2024",
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            setup["orcid"],
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--cal_year",
+            "2023-2024",
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -201,14 +248,22 @@ def test_integration_period_all(monkeypatch, integration_setup):
     """'all' includes everything."""
     setup = integration_setup
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--year", "all",
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            setup["orcid"],
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--year",
+            "all",
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -228,13 +283,20 @@ def test_integration_uses_cache_first_run(monkeypatch, integration_setup, capsys
     """Test that first run uses cached record."""
     setup = integration_setup
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            setup["orcid"],
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -250,8 +312,10 @@ def test_integration_no_fetch_with_missing_cache(monkeypatch, tmp_path, capsys):
     conn.execute(
         "CREATE TABLE faculty_identifiers (UIN TEXT, Scheme TEXT, Identifier TEXT, Rank INTEGER)"
     )
-    conn.execute("INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, 1)",
-                 ("123456789", "0000-0001-2345-6789"))
+    conn.execute(
+        "INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, 1)",
+        ("123456789", "0000-0001-2345-6789"),
+    )
     conn.commit()
     conn.close()
 
@@ -260,14 +324,22 @@ def test_integration_no_fetch_with_missing_cache(monkeypatch, tmp_path, capsys):
 
     output_dir = tmp_path / "output"
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--uin", "123456789",
-        "--mapping-db", str(db_path),
-        "--output-dir", str(output_dir),
-        "--data-dir", str(data_dir),
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--uin",
+            "123456789",
+            "--mapping-db",
+            str(db_path),
+            "--output-dir",
+            str(output_dir),
+            "--data-dir",
+            str(data_dir),
+            "--no-fetch",
+        ],
+    )
 
     with pytest.raises(SystemExit) as exc:
         cli.main()
@@ -283,13 +355,20 @@ def test_integration_missing_uin_writes_nothing(monkeypatch, integration_setup, 
     """A UIN with no ORCID row: exit 0 and no file (section contract rule 5; ORC-04)."""
     setup = integration_setup
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--uin", "999999999",  # Not in database
-        "--mapping-db", str(setup["db_path"]),
-        "--output-dir", str(setup["output_dir"]),
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--uin",
+            "999999999",  # Not in database
+            "--mapping-db",
+            str(setup["db_path"]),
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -302,12 +381,11 @@ def test_integration_missing_uin_writes_nothing(monkeypatch, integration_setup, 
 
 def test_integration_invalid_orcid_exits(monkeypatch, tmp_path):
     """Test that invalid ORCID format exits with error."""
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", "invalid-format",
-        "--output-dir", str(tmp_path),
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_latex.py", "--orcid", "invalid-format", "--output-dir", str(tmp_path), "--no-fetch"],
+    )
 
     with pytest.raises(SystemExit) as exc_info:
         cli.main()
@@ -323,28 +401,44 @@ def test_integration_publications_and_data_separate(monkeypatch, integration_set
     setup = integration_setup
 
     # Generate publications
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--section", "publications",
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            setup["orcid"],
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--section",
+            "publications",
+            "--no-fetch",
+        ],
+    )
     cli.main()
 
     pubs_file = setup["output_dir"] / "orcid-publications.tex"
     assert pubs_file.exists()
 
     # Generate data
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--section", "data",
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            setup["orcid"],
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--section",
+            "data",
+            "--no-fetch",
+        ],
+    )
     cli.main()
 
     data_file = setup["output_dir"] / "orcid-data.tex"
@@ -362,13 +456,20 @@ def test_integration_latex_syntax_valid(monkeypatch, integration_setup):
     """Test that generated LaTeX has valid syntax (basic check)."""
     setup = integration_setup
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            setup["orcid"],
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -389,18 +490,22 @@ def test_integration_latex_escapes_special_characters(monkeypatch, tmp_path):
         "person": {},
         "activities-summary": {
             "works": {
-                "group": [{
-                    "work-summary": [{
-                        "type": "journal-article",
-                        "title": {"title": {"value": "Paper with & special $ characters"}},
-                        "publication-date": {"year": {"value": "2024"}},
-                        "journal-title": {"value": "Journal"},
-                        "contributors": None,
-                        "external-ids": {"external-id": []},
-                    }]
-                }]
+                "group": [
+                    {
+                        "work-summary": [
+                            {
+                                "type": "journal-article",
+                                "title": {"title": {"value": "Paper with & special $ characters"}},
+                                "publication-date": {"year": {"value": "2024"}},
+                                "journal-title": {"value": "Journal"},
+                                "contributors": None,
+                                "external-ids": {"external-id": []},
+                            }
+                        ]
+                    }
+                ]
             }
-        }
+        },
     }
 
     data_dir = tmp_path / "data"
@@ -411,13 +516,20 @@ def test_integration_latex_escapes_special_characters(monkeypatch, tmp_path):
 
     output_dir = tmp_path / "output"
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", "0000-0001-2345-6789",
-        "--output-dir", str(output_dir),
-        "--data-dir", str(data_dir),
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            "0000-0001-2345-6789",
+            "--output-dir",
+            str(output_dir),
+            "--data-dir",
+            str(data_dir),
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -436,10 +548,13 @@ def test_integration_multiple_runs_overwrite(monkeypatch, integration_setup):
 
     args = [
         "run_latex.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--no-fetch"
+        "--orcid",
+        setup["orcid"],
+        "--output-dir",
+        str(setup["output_dir"]),
+        "--data-dir",
+        str(setup["data_dir"]),
+        "--no-fetch",
     ]
 
     # First run
@@ -467,13 +582,20 @@ def test_integration_creates_nested_output_dirs(monkeypatch, integration_setup):
 
     nested_output = setup["output_dir"] / "level1" / "level2" / "level3"
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(nested_output),
-        "--data-dir", str(setup["data_dir"]),
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            setup["orcid"],
+            "--output-dir",
+            str(nested_output),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -494,13 +616,20 @@ def test_integration_empty_record_no_file(monkeypatch, tmp_path, empty_record):
 
     output_dir = tmp_path / "output"
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", "0000-0009-0000-0000",
-        "--output-dir", str(output_dir),
-        "--data-dir", str(data_dir),
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            "0000-0009-0000-0000",
+            "--output-dir",
+            str(output_dir),
+            "--data-dir",
+            str(data_dir),
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -515,13 +644,20 @@ def test_integration_stdout_stderr_separation(monkeypatch, integration_setup, ca
     """Test that file paths go to stdout and logs go to stderr."""
     setup = integration_setup
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_latex.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_latex.py",
+            "--orcid",
+            setup["orcid"],
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--no-fetch",
+        ],
+    )
 
     cli.main()
 
@@ -544,16 +680,24 @@ def test_integration_run_json_entry_point(monkeypatch, integration_setup):
 
     # Import run_json module
     import sys
+
     sys.path.insert(0, str(Path(__file__).parent.parent))
     import run_json
 
-    monkeypatch.setattr(sys, "argv", [
-        "run_json.py",
-        "--orcid", setup["orcid"],
-        "--output-dir", str(setup["output_dir"]),
-        "--data-dir", str(setup["data_dir"]),
-        "--no-fetch"
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_json.py",
+            "--orcid",
+            setup["orcid"],
+            "--output-dir",
+            str(setup["output_dir"]),
+            "--data-dir",
+            str(setup["data_dir"]),
+            "--no-fetch",
+        ],
+    )
 
     run_json.main()
 
@@ -576,10 +720,20 @@ def test_integration_run_json_no_fetch_with_missing_cache_fails(monkeypatch, tmp
     import run_json
 
     (tmp_path / "ORCID_JSON").mkdir()
-    monkeypatch.setattr(sys, "argv", [
-        "run_json.py", "--orcid", "0000-0001-2345-6789",
-        "--output-dir", str(tmp_path / "out"), "--data-dir", str(tmp_path), "--no-fetch",
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_json.py",
+            "--orcid",
+            "0000-0001-2345-6789",
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--data-dir",
+            str(tmp_path),
+            "--no-fetch",
+        ],
+    )
     with pytest.raises(SystemExit) as exc:
         run_json.main()
     assert exc.value.code == 2

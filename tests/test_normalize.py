@@ -53,8 +53,8 @@ def test_strip_title_wrapper():
 def test_strip_mathml_namespace():
     text = '<mml:math xmlns:mml="http://www.w3.org/1998/Math/MathML"><mml:msub><mml:mn>3</mml:mn></mml:msub></mml:math>'
     result = strip_html_tags(text)
-    assert '<' not in result
-    assert '3' in result
+    assert "<" not in result
+    assert "3" in result
 
 
 def test_strip_collapses_whitespace():
@@ -99,9 +99,9 @@ def test_escape_latex_smart_strong():
 
 
 def test_escape_latex_smart_remaining_stripped():
-    result = escape_latex_smart('<mml:math>content</mml:math>')
-    assert '<' not in result
-    assert 'content' in result
+    result = escape_latex_smart("<mml:math>content</mml:math>")
+    assert "<" not in result
+    assert "content" in result
 
 
 def test_escape_latex_smart_no_tags():
@@ -172,7 +172,7 @@ def test_smart_preserves_inline_math():
 def test_smart_html_subscript():
     result = escape_latex_smart("CO<sub>2</sub> emissions")
     assert r"\textsubscript{2}" in result
-    assert '<' not in result
+    assert "<" not in result
 
 
 def test_smart_html_italic():
