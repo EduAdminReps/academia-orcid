@@ -244,7 +244,7 @@ def test_integration_uses_cache_first_run(monkeypatch, integration_setup, capsys
 
 
 def test_integration_no_fetch_with_missing_cache(monkeypatch, tmp_path, capsys):
-    """Test --no-fetch with missing cache creates placeholder."""
+    """--no-fetch with a mapped ORCID but no cache file fails the section (exit 2), no file."""
     db_path = tmp_path / "shared.db"
     conn = sqlite3.connect(db_path)
     conn.execute(
@@ -269,24 +269,18 @@ def test_integration_no_fetch_with_missing_cache(monkeypatch, tmp_path, capsys):
         "--no-fetch"
     ])
 
-    cli.main()
-
-    # Should create placeholder
-    output_file = output_dir / "orcid-publications.tex"
-    assert output_file.exists()
-
-    content = output_file.read_text()
-    assert "unavailable" in content.lower()
-
-    captured = capsys.readouterr()
-    assert "No ORCID record found" in captured.err
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2
+    assert not (output_dir / "orcid-publications.tex").exists()
+    assert "run `just prefetch`" in capsys.readouterr().err
 
 
 # ── Error Recovery ────────────────────────────────────────────────────────
 
 
-def test_integration_missing_uin_creates_placeholder(monkeypatch, integration_setup, capsys):
-    """Test that missing UIN in database creates placeholder."""
+def test_integration_missing_uin_writes_nothing(monkeypatch, integration_setup, capsys):
+    """A UIN with no ORCID row: exit 0 and no file (section contract rule 5; ORC-04)."""
     setup = integration_setup
 
     monkeypatch.setattr(sys, "argv", [
@@ -300,13 +294,10 @@ def test_integration_missing_uin_creates_placeholder(monkeypatch, integration_se
     cli.main()
 
     output_file = setup["output_dir"] / "orcid-publications.tex"
-    assert output_file.exists()
-
-    content = output_file.read_text()
-    assert "No ORCID ID on file" in content
+    assert not output_file.exists()
 
     captured = capsys.readouterr()
-    assert "No ORCID ID found for UIN 999999999" in captured.err
+    assert "No ORCID ID on file for UIN 999999999" in captured.err
 
 
 def test_integration_invalid_orcid_exits(monkeypatch, tmp_path):
@@ -585,3 +576,20 @@ def test_integration_run_json_entry_point(monkeypatch, integration_setup):
     assert "_meta" in data
     assert "journal_articles" in data
     assert data["_meta"]["section"] == "orcid-publications"
+
+
+def test_integration_run_json_no_fetch_with_missing_cache_fails(monkeypatch, tmp_path, capsys):
+    """JSON and LaTeX agree: under --no-fetch an uncached record fails the section (exit 2)."""
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    import run_json
+
+    (tmp_path / "ORCID_JSON").mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "run_json.py", "--orcid", "0000-0001-2345-6789",
+        "--output-dir", str(tmp_path / "out"), "--data-dir", str(tmp_path), "--no-fetch",
+    ])
+    with pytest.raises(SystemExit) as exc:
+        run_json.main()
+    assert exc.value.code == 2
+    assert not (tmp_path / "out" / "orcid-publications.json").exists()
+    assert "run `just prefetch`" in capsys.readouterr().err

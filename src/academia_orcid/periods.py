@@ -22,7 +22,8 @@ For --semester the values are term codes: 202431, 202331-202521, 202331+, all.
 
 Records are kept when they **overlap** the period. A record's own dates are
 read with the same rules: an award dated 2024 is ``--cal_year 2024``; a
-proposal filed in fiscal year 2024 is ``--year 2024``. A blank start or end
+proposal filed in fiscal year 2024 is ``--year 2024``; a record dated by a
+month is in that month's term (``Period.overlaps_date``). A blank start or end
 term is open, so a record with unknown dates matches every period.
 
 This module uses only the standard library and imports nothing from coe_core:
@@ -111,6 +112,17 @@ class Period:
         start, end = _year_bounds(kind, int(year))
         return self.overlaps(start, end)
 
+    def overlaps_date(self, year: int | str, month: int | str | None = None) -> bool:
+        """True if a record dated by a calendar year, and a month when one is known,
+        meets the period: the month's term if the month is known (and valid), else
+        the whole calendar year (``overlaps_year``)."""
+        if month:
+            try:
+                return self.contains_term(term_of_month(year, month))
+            except ValueError:
+                pass
+        return self.overlaps_year(year)
+
     def calendar_years(self) -> tuple[int | None, int | None]:
         """Calendar years the period touches (None = open), for records that only know a year."""
         first = int(self.start_term[:4]) if self.start_term else None
@@ -134,6 +146,16 @@ class Period:
         if self.kind is None:
             return []
         return [f"--{self.kind}", self.value]
+
+
+def term_of_month(year: int | str, month: int | str) -> str:
+    """The College Station term holding a calendar month: January to May spring,
+    June and July summer, August to December fall. Raises ValueError on a bad month."""
+    number = int(month)
+    if not 1 <= number <= 12:
+        raise ValueError(f"not a month: {month!r}")
+    semester = "1" if number <= 5 else "2" if number <= 7 else "3"
+    return f"{int(year)}{semester}1"
 
 
 def _term_name(term: str) -> str:

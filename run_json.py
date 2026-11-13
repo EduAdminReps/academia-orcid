@@ -154,7 +154,11 @@ def main():
         logger.error(f"ORCID API fetch failed for {orcid_id}: {e}")
         sys.exit(2)
     if not record:
-        logger.warning(f"No ORCID record found for {orcid_id}; skipping.")
+        if not fetch_enabled:
+            # Under --no-fetch, a missing record is a gap in the cache, not "no data".
+            logger.error(f"ORCID record for {orcid_id} is not cached; run `just prefetch`.")
+            sys.exit(2)
+        logger.info(f"No ORCID record for {orcid_id}; skipping.")
         return
 
     # Extract and export

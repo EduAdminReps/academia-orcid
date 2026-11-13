@@ -412,6 +412,17 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path, dept: str = None) -> dict 
     return record
 
 
+def _fetch_or_fall_back(orcid_id: str, data_dir: Path, dept: str | None, cached: dict | None) -> dict:
+    """Fetch the record; if that fails and a cached one exists, use it with a warning."""
+    try:
+        return fetch_orcid_record(orcid_id, data_dir, dept)
+    except OrcidFetchError as e:
+        if not cached:
+            raise
+        logger.warning(f"ORCID fetch failed for {orcid_id} ({e}); using the cached record")
+        return cached
+
+
 def get_or_fetch_orcid_record(
     data_dir: Path,
     orcid_id: str,
@@ -433,8 +444,13 @@ def get_or_fetch_orcid_record(
     Returns:
         ORCID record dict, or None if not found and fetch disabled.
 
+    A failed refetch (stale or forced) falls back to the cached record, with a
+    warning: usable data beats a failed section during an API outage (owner,
+    2026-11-12; audit SCH-11, same here).
+
     Raises:
-        OrcidFetchError: Propagated from fetch_orcid_record() on API errors.
+        OrcidFetchError: Propagated from fetch_orcid_record() on API errors,
+            when no cached record exists to fall back to.
     """
     # SECURITY: Validate ORCID ID format (defense in depth - also checked in called functions)
     if not validate_orcid_id(orcid_id):
@@ -449,13 +465,13 @@ def get_or_fetch_orcid_record(
     if cache_ttl is None:
         cache_ttl = config.cache_ttl
 
-    # Force fetch: skip cache entirely
+    record = load_orcid_record(data_dir, orcid_id, dept)
+
+    # Force fetch: ignore the cache, unless the fetch fails
     if force and fetch:
         logger.info("Force fetching ORCID record (ignoring cache)...")
-        return fetch_orcid_record(orcid_id, data_dir, dept)
+        return _fetch_or_fall_back(orcid_id, data_dir, dept, record)
 
-    # Try loading from cache first
-    record = load_orcid_record(data_dir, orcid_id, dept)
     if record:
         # Check if cache is still fresh
         if is_cache_fresh(record, cache_ttl):
@@ -465,7 +481,7 @@ def get_or_fetch_orcid_record(
             logger.info(f"Cached ORCID record for {orcid_id} is stale (age > {cache_ttl}s), refetching...")
             # Cache is stale - fetch new data if allowed
             if fetch:
-                return fetch_orcid_record(orcid_id, data_dir, dept)
+                return _fetch_or_fall_back(orcid_id, data_dir, dept, record)
             else:
                 logger.warning("Using stale cache (fetch disabled)")
                 return record

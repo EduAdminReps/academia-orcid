@@ -16,6 +16,7 @@ import re
 import unicodedata
 from datetime import datetime, timezone
 
+from academia_orcid.extract import split_name
 from academia_orcid.normalize import strip_html_tags
 
 logger = logging.getLogger("academia_orcid.bibtex_export")
@@ -92,8 +93,8 @@ def _get_first_author_last_name(pub: dict) -> str:
     """Extract first author's last name from raw_authors or authors field."""
     raw = pub.get("raw_authors", [])
     if raw:
-        parts = raw[0].split()
-        return parts[-1] if parts else "Unknown"
+        family, _ = split_name(html.unescape(raw[0]))
+        return family or "Unknown"
 
     # Fallback: parse from formatted authors string
     authors_str = pub.get("authors", "")
@@ -127,14 +128,8 @@ def _format_authors_bibtex(raw_authors: list[str]) -> str:
 
     formatted = []
     for name in raw_authors:
-        name = html.unescape(name)
-        parts = name.split()
-        if len(parts) > 1:
-            last = parts[-1]
-            first = " ".join(parts[:-1])
-            formatted.append(f"{last}, {first}")
-        else:
-            formatted.append(name)
+        family, given = split_name(html.unescape(name))  # either credit-name order (ORC-01)
+        formatted.append(f"{family}, {given}" if given else family)
 
     return " and ".join(formatted)
 

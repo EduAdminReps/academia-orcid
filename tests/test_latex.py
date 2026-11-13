@@ -40,8 +40,11 @@ def test_escape_latex_braces():
     assert escape_latex("{x}") == r"\{x\}"
 
 
-def test_escape_latex_strips_non_latin1_after_escaping():
+def test_escape_latex_keeps_what_pdflatex_sets_and_drops_the_rest():
+    """Latin letters beyond Latin-1, dashes and quotes typeset with the report
+    preamble and are kept; CJK cannot be set and is dropped (audit SCH-07)."""
     assert escape_latex("Café & 北京") == r"Café \& "
+    assert escape_latex("Ćwikła – “x” state‐of‐the‐art") == "Ćwikła – “x” state‐of‐the‐art"
 
 
 # ── format_date_range ──────────────────────────────────────────────────────
@@ -125,7 +128,7 @@ def test_generate_data_latex_empty():
         memberships=[],
         services=[],
     )
-    assert "No additional data found" in result
+    assert result == ""  # no data, no file (section contract rule 5; ORC-04)
 
 
 # ── SECURITY: sanitize_url_for_latex ──────────────────────────────────────

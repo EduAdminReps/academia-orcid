@@ -471,3 +471,39 @@ def test_fetch_orcid_record_no_requests_library(tmp_path, caplog):
 
     # Check log messages instead of stderr
     assert "requests library not available" in caplog.text
+
+
+# ── A failed refetch falls back to the cached record (owner, 2026-11-12) ───
+
+
+def _cache(tmp_path, orcid, cached_at):
+    (tmp_path / "ORCID_JSON").mkdir(exist_ok=True)
+    record = {"orcid-identifier": {"path": orcid}, "_cache_metadata": {"cached_at": cached_at}}
+    (tmp_path / "ORCID_JSON" / f"{orcid}.json").write_text(json.dumps(record))
+    return record
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_failed_refetch_uses_the_cached_record(tmp_path, monkeypatch, caplog, force):
+    from academia_orcid import fetch
+
+    orcid = "0000-0001-2345-6789"
+    cached = _cache(tmp_path, orcid, "2000-01-01T00:00:00+00:00")  # stale
+
+    def fail(*_args, **_kwargs):
+        raise OrcidFetchError("503")
+
+    monkeypatch.setattr(fetch, "fetch_orcid_record", fail)
+    assert fetch.get_or_fetch_orcid_record(tmp_path, orcid, force=force) == cached
+    assert "using the cached record" in caplog.text
+
+
+def test_failed_fetch_with_nothing_cached_still_raises(tmp_path, monkeypatch):
+    from academia_orcid import fetch
+
+    def fail(*_args, **_kwargs):
+        raise OrcidFetchError("503")
+
+    monkeypatch.setattr(fetch, "fetch_orcid_record", fail)
+    with pytest.raises(OrcidFetchError):
+        fetch.get_or_fetch_orcid_record(tmp_path, "0000-0001-2345-6789")

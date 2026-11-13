@@ -1,81 +1,17 @@
 """LaTeX generation for ORCID publication and data sections."""
 
-import re
+# Escaping is the vendored coe_core.latex (latex_text.py; refreshed from
+# coe-data-core with `just vendor-set`), shared with the twin repo:
+# - escape_latex (= escape_latex_lossy) for structured fields (names, venues,
+#   organizations): specials escaped, and characters pdflatex cannot set with the
+#   report preamble dropped, while dashes, quotes and letters such as ł, ć and š
+#   are kept (audit SCH-07);
+# - escape_latex_smart (normalize.py, = markup_to_latex) for free text that may
+#   carry HTML tags or $...$ math (titles, biography).
+from academia_orcid.latex_text import escape_latex_lossy as escape_latex
+from academia_orcid.latex_text import sanitize_url_for_latex
 
-# NOTE: escape_latex_smart (from normalize.py) is used for free-text fields
-# (titles, biography) that may contain HTML markup or LaTeX math.
-# escape_latex (below) is used for structured fields (names, orgs, venues)
-# that never contain markup.
-
-# Characters outside Latin-1 (U+00FF) that pdflatex cannot render without
-# specialized packages (CJK, Arabic, etc.). Accented Latin characters (é, ñ, ü)
-# are kept — pdflatex handles them with \usepackage[utf8]{inputenc} + lmodern.
-_NON_LATIN1_RE = re.compile(r'[^\x00-\xff]')
-
-# Every LaTeX special character and its text-mode replacement. Applied in a
-# single pass (str.translate), so a replacement is never itself re-escaped:
-# chained str.replace calls turned "\" into "\textbackslash{}" and then escaped
-# its braces, rendering "x\y" as "x\{}y".
-_LATEX_SPECIALS = str.maketrans({
-    "\\": r"\textbackslash{}",
-    "&": r"\&",
-    "%": r"\%",
-    "$": r"\$",
-    "#": r"\#",
-    "_": r"\_",
-    "{": r"\{",
-    "}": r"\}",
-    "~": r"\textasciitilde{}",
-    "^": r"\textasciicircum{}",
-})
-
-
-def sanitize_url_for_latex(url: str) -> str:
-    """Sanitize a URL for safe use inside LaTeX \\href{}{}.
-
-    Strips characters that could break out of the \\href command
-    (braces, backslashes) and rejects non-http(s) schemes.
-
-    Args:
-        url: Raw URL string
-
-    Returns:
-        Sanitized URL safe for \\href{}, or empty string if invalid.
-    """
-    if not url:
-        return ""
-    url = url.strip()
-    # Only allow http/https URLs
-    if not re.match(r'^https?://', url, re.IGNORECASE):
-        return ""
-    # Remove characters that can break \href{}: backslashes, braces
-    url = url.replace("\\", "").replace("{", "").replace("}", "")
-    return url
-
-
-def escape_latex(text: str) -> str:
-    """Escape special LaTeX characters.
-
-    Strips characters outside the Latin-1 range (U+0000-U+00FF). Accented
-    Latin characters (e, n, u) are kept; CJK, Arabic, and other non-Latin
-    scripts are silently removed because pdflatex cannot render them without
-    specialized packages. This only affects LaTeX/PDF output.
-    """
-    if not text:
-        return ""
-    text = text.translate(_LATEX_SPECIALS)
-    # Strip characters outside Latin-1 that pdflatex cannot render
-    text = _NON_LATIN1_RE.sub('', text)
-    return text
-
-
-def generate_unavailable_latex(section: str, reason: str) -> str:
-    """Generate placeholder LaTeX when ORCID data is unavailable."""
-    if section == "publications":
-        heading = r"\section{ORCID Publications}"
-    else:
-        heading = r"\section{ORCID Data}"
-    return f"{heading}\n\n\\noindent\n\\textit{{{escape_latex(reason)}}}\n"
+__all__ = ["escape_latex", "sanitize_url_for_latex"]
 
 
 def format_date_range(start_year: str, end_year: str) -> str:
@@ -375,6 +311,6 @@ def generate_data_latex(
         lines.append("")
 
     if not has_content:
-        lines.append(r"\textit{No additional data found in ORCID record.}")
+        return ""  # no data: the caller writes no file (section contract rule 5; ORC-04)
 
     return "\n".join(lines)

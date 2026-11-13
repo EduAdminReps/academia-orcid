@@ -3,7 +3,6 @@
 import html
 import logging
 import re
-import sys
 
 from .config import get_config
 from .periods import Period
@@ -14,190 +13,228 @@ logger = logging.getLogger("academia_orcid.extract")
 
 
 def filter_publications_by_period(publications: list[dict], period: Period) -> list[dict]:
-    """Keep publications whose year (a calendar year) overlaps the report period.
+    """Keep the publications dated inside the report period.
 
-    The period comes from the shared flags (``academia_orcid.periods``): with
-    ``--year 2024`` (fiscal: Fall 2023 + Spring 2024) both 2023 and 2024
-    publications are kept. A publication with no year or an unparseable year
-    is kept (unknown dates match every period); the latter with a warning.
+    All years (no flag, or ``all``): every publication, undated ones included.
+    A period: a publication with a month is kept when that month's term is in the
+    period, one with only a year when that calendar year overlaps it (with
+    ``--year 2024``, fiscal: Fall 2023 + Spring 2024, a 2023 work dated March is
+    left out). A publication with no year, or an unparseable one, is left out of
+    every period report and shown only in all-years reports (owner, 2026-11-12;
+    audit ORC-16).
     """
     if period.is_all:
         return publications
-
-    filtered = []
+    kept = []
     for pub in publications:
-        pub_year_str = str(pub.get("year", "") or "").strip()
-        if not pub_year_str:
-            filtered.append(pub)
-            continue
-        if not re.fullmatch(r"\d{4}", pub_year_str):
-            title = pub.get("title", "Unknown")[:60]
-            logger.warning(f"Unparseable year '{pub_year_str}' for '{title}'; including in results")
-            filtered.append(pub)
-            continue
-        if period.overlaps_year(pub_year_str):
-            filtered.append(pub)
+        year = str(pub.get("year") or "").strip()
+        if re.fullmatch(r"\d{4}", year) and period.overlaps_date(year, pub.get("month") or None):
+            kept.append(pub)
+    return kept
 
-    return filtered
+
+def _obj(parent: object, key: str) -> dict:
+    """``parent[key]`` if it is a dict, else {}: ORCID sends null for missing objects
+    (``"publication-date": null`` on undated works; audit ORC-02)."""
+    value = parent.get(key) if isinstance(parent, dict) else None
+    return value if isinstance(value, dict) else {}
+
+
+def _value(parent: object, key: str) -> str:
+    """The ``value`` of ``parent[key]`` (ORCID's {"value": ...} wrapper), or ""."""
+    value = _obj(parent, key).get("value")
+    return str(value).strip() if value is not None else ""
+
+
+_DOI_PREFIX_RE = re.compile(r"^(?:https?://(?:www\.)?(?:dx\.)?doi\.org/|doi:\s*)", re.IGNORECASE)
+_DOI_RE = re.compile(r"10\.\d{4,9}/\S+")
+
+
+def normalize_doi(raw: object) -> str:
+    """A bare DOI (``10.xxxx/...``, case as written) from any form ORCID holds
+    (URL, ``doi:`` prefix); "" if it is not a DOI at all (audit ORC-06)."""
+    text = _DOI_PREFIX_RE.sub("", str(raw or "").strip()).strip()
+    return text if _DOI_RE.fullmatch(text) else ""
+
+
+def _work_doi(external_ids: list) -> str:
+    """The work's own DOI: relationship ``self`` first, else one with no
+    relationship; never ``part-of`` (a chapter's book), so a chapter whose only
+    DOI is its book's shows none (owner, 2026-11-12; audit ORC-06)."""
+    own, unmarked = "", ""
+    for eid in external_ids:
+        if not isinstance(eid, dict) or str(eid.get("external-id-type", "")).lower() != "doi":
+            continue
+        doi = normalize_doi(eid.get("external-id-value"))
+        relationship = str(eid.get("external-id-relationship") or "").lower()
+        if doi and relationship == "self" and not own:
+            own = doi
+        elif doi and not relationship and not unmarked:
+            unmarked = doi
+    return own or unmarked
+
+
+def split_name(raw: str) -> tuple[str, str]:
+    """(family, given) from an ORCID credit-name, which comes as "Given Family"
+    (44%) or "Family, Given" (56%; audit ORC-01). A name ending in one or two
+    capitals is family first too: "Doe J", "Smith JA", "Smith John A" (an
+    initial never follows the family name; in 299 of the cache's 306 two-word
+    cases the capitals are initials). Three capitals ("Min KIM") read as a surname."""
+    name = " ".join(str(raw).split())
+    if "," in name:
+        family, _, given = name.partition(",")
+        return family.strip(), given.replace(",", " ").strip()
+    parts = name.split(" ")
+    if len(parts) == 1:
+        return name, ""
+    if re.fullmatch(r"[A-Z]{1,2}\.?", parts[-1]) and not re.fullmatch(r"[A-Z]{1,2}\.?", parts[0]):
+        return parts[0], " ".join(parts[1:])
+    return parts[-1], " ".join(parts[:-1])
+
+
+_NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv"}
+
+
+def _initials(given: str) -> str:
+    """'Jane A.' -> 'J.A.', 'Jean-Pierre' -> 'J.-P.', 'JA' -> 'J.A.'; Jr./III left out."""
+    out = []
+    for word in given.replace(".", " ").split():
+        if word.lower() in _NAME_SUFFIXES:
+            continue
+        if re.fullmatch(r"[A-Z]{2,3}", word):
+            out.append("".join(letter + "." for letter in word))
+        else:
+            out.append("-".join(part[0] + "." for part in word.split("-") if part))
+    return "".join(out)
+
+
+def format_author(raw: str) -> str:
+    """'Last, F.M.' (IEEE style) for any credit-name form."""
+    family, given = split_name(raw)
+    initials = _initials(given)
+    return f"{family}, {initials}" if initials else family
+
+
+def _title_key(pub: dict) -> str:
+    """Title, lower-case, letters and digits only, for spotting the same work twice."""
+    return re.sub(r"[^0-9a-z]+", "", re.sub(r"<[^>]+>", "", pub.get("title", "")).lower())
+
+
+# A title this short ("Editorial", "Preface") does not identify a work on its own.
+MIN_TITLE_KEY = 20
+
+
+def collapse_duplicates(publications: list[dict]) -> list[dict]:
+    """Drop the second and later copies of one work (owner, 2026-11-12; audit ORC-10).
+
+    ORCID groups works by shared identifiers only, so a work imported once with a
+    DOI and once without lands in two groups. Two entries are the same work when
+    they have the same DOI, or, when either lacks one, the same type, title (at
+    least ``MIN_TITLE_KEY`` letters and digits) and year. Works with a DOI are
+    kept first, then the input order decides: callers pass journal articles,
+    then conference papers, then the rest, so one DOI filed under two types stays
+    with the journal article.
+    """
+    seen_doi: set[str] = set()
+    seen_title: set[tuple] = set()
+    kept_ids: set[int] = set()
+    ordered = sorted(enumerate(publications), key=lambda item: not item[1].get("doi"))
+    for index, pub in ordered:
+        doi = pub.get("doi", "").lower()  # DOIs are case-insensitive
+        key = _title_key(pub)
+        title_key = (pub.get("pub_type", ""), key, pub.get("year", ""))
+        if doi and doi in seen_doi:
+            continue
+        if len(key) >= MIN_TITLE_KEY and title_key in seen_title:
+            continue
+        if doi:
+            seen_doi.add(doi)
+        if len(key) >= MIN_TITLE_KEY:
+            seen_title.add(title_key)
+        kept_ids.add(index)
+    return [pub for index, pub in enumerate(publications) if index in kept_ids]
 
 
 def extract_publications(record: dict, author_limit: int | None = None) -> tuple[list, list, list]:
     """Extract journal articles, conference papers, and other from ORCID record.
 
+    One entry per work, duplicates collapsed (``collapse_duplicates``). A work
+    whose date, title, contributors or ids are null keeps what it has: an undated
+    work is listed in all-years reports (audit ORC-02).
+
     Args:
         record: Full ORCID record dict
         author_limit: Max authors to display before "et al." (default: from config)
     """
-    journal_articles = []
-    conference_papers = []
-    other_publications = []
+    if author_limit is None:
+        author_limit = get_config().author_limit
+    works = _obj(_obj(record, "activities-summary"), "works").get("group") or []
 
-    activities = record.get("activities-summary", {})
-    works = activities.get("works", {}).get("group", [])
-
-    if not works:
-        return journal_articles, conference_papers, other_publications
-
+    entries = []
     for work_group in works:
+        summaries = (work_group or {}).get("work-summary") or []
+        work = summaries[0] if summaries and isinstance(summaries[0], dict) else None
+        if work is None:
+            continue
         try:
-            work_summaries = work_group.get("work-summary", [])
-            if not work_summaries:
-                continue
-
-            work_details = work_summaries[0]
-            if not work_details:
-                continue
-
-            pub_type = work_details.get("type", "").lower()
-
-            # Get title
-            raw_title = work_details.get("title", {}).get("title", {}).get("value", "Untitled")
-            title = html.unescape(raw_title)
-
-            # Get year
-            year = work_details.get("publication-date", {}).get("year", {}).get("value", "")
-
-            # Get authors
-            contributors = work_details.get("contributors", {})
-            if contributors:
-                contributors = contributors.get("contributor", [])
-            else:
-                contributors = []
-
-            author_names = []
-            for contributor in contributors:
-                if contributor:
-                    credit_name = contributor.get("credit-name", {})
-                    if credit_name:
-                        raw_name = credit_name.get("value", "")
-                        if raw_name:
-                            name = html.unescape(raw_name)
-                            author_names.append(name)
-
-            # Get journal/venue name
-            venue = ""
-            journal_title = work_details.get("journal-title", {})
-            if journal_title:
-                raw_venue = journal_title.get("value", "")
-                if raw_venue:
-                    venue = html.unescape(raw_venue)
-
-            if not venue:
-                conference = work_details.get("conference", {})
-                if conference:
-                    raw_conf = conference.get("name", "")
-                    if raw_conf:
-                        venue = html.unescape(raw_conf)
-
-            # Get month if available
-            month = ""
-            pub_date = work_details.get("publication-date", {})
-            if pub_date:
-                month_obj = pub_date.get("month")
-                if month_obj and isinstance(month_obj, dict):
-                    month = month_obj.get("value", "")
-
-            # Get URL if available
-            url = ""
-            url_obj = work_details.get("url")
-            if url_obj and isinstance(url_obj, dict):
-                url = url_obj.get("value", "")
-
-            # Collect all external IDs
-            doi = ""
-            all_external_ids = {}
-            external_ids = work_details.get("external-ids", {})
-            if external_ids:
-                external_id_list = external_ids.get("external-id", [])
-                if external_id_list:
-                    for eid in external_id_list:
-                        if eid:
-                            eid_type = eid.get("external-id-type", "")
-                            eid_value = eid.get("external-id-value", "")
-                            if eid_type and eid_value:
-                                all_external_ids[eid_type] = eid_value
-                                if eid_type == "doi" and not doi:
-                                    doi = eid_value
-
-            # Get citation data if present (may contain BibTeX)
-            citation_data = work_details.get("citation")
-
-            # Format authors (IEEE style: Last, F.M.)
-            if author_limit is None:
-                author_limit = get_config().author_limit
-            formatted_authors = []
-            for author in author_names[:author_limit]:  # Limit to configured number of authors
-                parts = author.split()
-                if len(parts) > 1:
-                    last_name = parts[-1]
-                    initials = ''.join(word[0] + '.' for word in parts[:-1])
-                    formatted_authors.append(f"{last_name}, {initials}")
-                else:
-                    formatted_authors.append(author)
-
+            title = html.unescape(_value(_obj(work, "title"), "title")) or "Untitled"
+            date = _obj(work, "publication-date")
+            author_names = [
+                html.unescape(_value(contributor, "credit-name"))
+                for contributor in (_obj(work, "contributors").get("contributor") or [])
+                if _value(contributor, "credit-name")
+            ]
+            venue = html.unescape(_value(work, "journal-title")) or html.unescape(
+                str(_obj(work, "conference").get("name") or "")
+            )
+            external_ids = _obj(work, "external-ids").get("external-id") or []
+            all_external_ids = {
+                str(eid.get("external-id-type")): str(eid.get("external-id-value"))
+                for eid in external_ids
+                if isinstance(eid, dict) and eid.get("external-id-type") and eid.get("external-id-value")
+            }
+            doi = _work_doi(external_ids)
+            all_external_ids.pop("doi", None)
+            if doi:
+                all_external_ids["doi"] = doi
+            formatted = [format_author(name) for name in author_names[:author_limit]]
             if len(author_names) > author_limit:
-                formatted_authors.append("et al.")
-
-            pub_entry = {
-                "authors": ", ".join(formatted_authors),
-                "raw_authors": list(author_names),
+                formatted.append("et al.")
+            entries.append({
+                "authors": ", ".join(formatted),
+                "raw_authors": author_names,
                 "title": title,
                 "venue": venue,
-                "year": year,
-                "month": month,
+                "year": _value(date, "year"),
+                "month": _value(date, "month"),
                 "doi": doi,
-                "url": url,
-                "pub_type": pub_type,
+                "url": _value(work, "url"),
+                "pub_type": str(work.get("type") or "").lower(),
                 "external_ids": all_external_ids,
-                "citation": citation_data,
-            }
+                "citation": work.get("citation"),
+            })
+        except (AttributeError, TypeError, ValueError) as e:
+            # Not expected with the null-safe reads above; say which work, so a
+            # real parsing bug is visible rather than a silent gap.
+            logger.warning(f"Skipping work {work.get('put-code')}: {type(e).__name__}: {e}")
 
-            # Categorize
-            if pub_type in JOURNAL_ARTICLE_TYPES:
-                journal_articles.append(pub_entry)
-            elif pub_type in CONFERENCE_PAPER_TYPES:
-                conference_papers.append(pub_entry)
-            else:
-                # Include other types (books, book chapters, etc.)
-                other_publications.append(pub_entry)
+    def category(pub: dict) -> int:
+        return 0 if pub["pub_type"] in JOURNAL_ARTICLE_TYPES else (
+            1 if pub["pub_type"] in CONFERENCE_PAPER_TYPES else 2
+        )
 
-        except (KeyError, AttributeError, TypeError, ValueError, IndexError) as e:
-            # Skip malformed work entries (missing fields, unexpected structure)
-            logger.warning(f"Skipping malformed work entry: {type(e).__name__}")
-            continue
+    entries.sort(key=category)
+    entries = collapse_duplicates(entries)
 
-    # Sort by year (descending, integer comparison)
-    def _year_sort_key(pub):
-        try:
-            return int(pub.get("year", "0"))
-        except (ValueError, TypeError):
-            return 0
+    def year_key(pub: dict) -> int:
+        return int(pub["year"]) if re.fullmatch(r"\d{4}", pub["year"]) else 0
 
-    journal_articles.sort(key=_year_sort_key, reverse=True)
-    conference_papers.sort(key=_year_sort_key, reverse=True)
-    other_publications.sort(key=_year_sort_key, reverse=True)
-
-    return journal_articles, conference_papers, other_publications
+    lists: tuple[list, list, list] = ([], [], [])
+    for pub in entries:
+        lists[category(pub)].append(pub)
+    for publications in lists:
+        publications.sort(key=year_key, reverse=True)
+    return lists
 
 
 def extract_biography(record: dict) -> str | None:

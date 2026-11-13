@@ -207,18 +207,12 @@ def test_cli_handles_uin_not_in_database(monkeypatch, tmp_path, mapping_db, caps
         "--no-fetch"
     ])
 
-    cli.main()
+    cli.main()  # exits 0
 
-    # Should create placeholder file
-    assert (output_dir / "orcid-publications.tex").exists()
-
-    # Check stderr for warning
+    # No data, no file (section contract rule 5; audit ORC-04)
+    assert not (output_dir / "orcid-publications.tex").exists()
     captured = capsys.readouterr()
-    assert "No ORCID ID found for UIN 000000000" in captured.err
-
-    # Check placeholder content
-    content = (output_dir / "orcid-publications.tex").read_text()
-    assert "No ORCID ID on file" in content
+    assert "No ORCID ID on file for UIN 000000000" in captured.err
 
 
 def test_cli_handles_null_orcid_in_database(monkeypatch, tmp_path, mapping_db, capsys):
@@ -232,12 +226,11 @@ def test_cli_handles_null_orcid_in_database(monkeypatch, tmp_path, mapping_db, c
         "--no-fetch"
     ])
 
-    cli.main()
+    cli.main()  # exits 0
 
-    # Should create placeholder
-    assert (output_dir / "orcid-publications.tex").exists()
+    assert not (output_dir / "orcid-publications.tex").exists()
     captured = capsys.readouterr()
-    assert "No ORCID ID found for UIN 999999999" in captured.err
+    assert "No ORCID ID on file for UIN 999999999" in captured.err
 
 
 # ── ORCID Record Loading ──────────────────────────────────────────────────
@@ -290,12 +283,12 @@ def test_cli_handles_missing_cached_record(monkeypatch, tmp_path, capsys):
         "--no-fetch"
     ])
 
-    cli.main()
-
-    # Should create placeholder
-    assert (output_dir / "orcid-publications.tex").exists()
-    captured = capsys.readouterr()
-    assert "No ORCID record found" in captured.err
+    # Under --no-fetch a missing record is a cache gap: the section fails, no file.
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2
+    assert not output_dir.exists() or not any(output_dir.iterdir())
+    assert "not cached; run `just prefetch`" in capsys.readouterr().err
 
 
 # ── Section Generation ────────────────────────────────────────────────────

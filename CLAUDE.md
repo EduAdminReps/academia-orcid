@@ -40,7 +40,9 @@ academia-orcid/
 │       ├── json_export.py        # JSON export (publications + data sections)
 │       ├── bibtex_export.py       # BibTeX export from ORCID publication data
 │       ├── enrich.py             # DOI content negotiation enrichment (opt-in)
-│       ├── normalize.py          # Text normalization (HTML, LaTeX, Unicode)
+│       ├── normalize.py          # Text normalization (HTML, LaTeX, Unicode), from latex_text
+│       ├── latex_text.py         # Vendored coe_core.latex (escaping, HTML to LaTeX); never edit here
+│       ├── periods.py            # Vendored coe_core.periods (the period flags); never edit here
 │       ├── fetch.py              # ORCID API client, caching, UIN mapping
 │       ├── prefetch.py           # Bulk cache fill for every mapped ORCID (run_prefetch.py)
 │       ├── config.py             # YAML configuration management (optional pyyaml)
@@ -185,7 +187,7 @@ python run_latex.py [--uin <uin> --mapping-db <path> | --orcid <orcid>] --output
 - No flag: all years. A malformed value exits 1 with a message.
 
 **Filter Behavior:**
-- **`--section publications`**: a publication's year is a calendar year; it is kept when that year overlaps the period (so `--year 2024` keeps 2023 and 2024 publications). Publications with no or an unparseable year are kept.
+- **`--section publications`** (owner, 2026-11-12): a publication dated by a month is kept when that month's term is in the period (`Period.overlaps_date`: January–May spring, June–July summer, August–December fall); one with only a year when that calendar year overlaps it (so `--year 2024` keeps any 2024 work, and a 2023 work only if dated August–December). A publication with no or an unparseable year is left out of every period report and shown only in all-years reports (no flag, or `all`).
 - **`--section data`**: The period is **ignored**. All employment, education, membership, etc. data is always included regardless of dates.
 
 ## Section: Publications
@@ -199,6 +201,21 @@ Extracts works from ORCID record and categorizes by type:
 **Other:** books, chapters, reports, dissertations, etc.
 
 Output includes DOI links where available.
+
+**One entry per work.** ORCID groups works by shared identifiers only, so a
+work imported once with a DOI and once without lands in two groups.
+`extract.collapse_duplicates` keeps one entry per work: same DOI (case-insensitive),
+or, when either lacks one, the same type, title (at least 20 letters and digits,
+so "Editorial" never matches) and year. The DOI-bearing copy wins, then journal
+over conference over other (owner, 2026-11-12).
+
+**DOIs** are stored bare (`10.xxxx/...`, URL and `doi:` prefixes stripped;
+`extract.normalize_doi`). Only the work's own DOI is used (relationship `self`, or
+none given); a chapter whose only DOI is its book's (`part-of`) shows no DOI.
+
+**Authors** are shown "Family, F.M." (IEEE style) whatever the credit-name order:
+`extract.split_name` reads "Given Family", "Family, Given" (56% of the cache) and
+"Family F", "Family Given F" (trailing initials). BibTeX uses the same split.
 
 ## Section: Data
 
@@ -311,6 +328,7 @@ The standalone CV tools (`tools/`) are **independent** of the section-provider i
 - ORCID API has rate limits — scripts implement delays and retries
 - Unicode handling via `html.unescape()` for international characters
 - LaTeX special characters escaped automatically
-- **Non-Latin character stripping (LaTeX output only):** `escape_latex()` and `escape_latex_smart()` strip characters outside the Latin-1 range (U+0000–U+00FF). Accented Latin characters (é, ñ, ü) are kept — pdflatex handles them with `inputenc` + `lmodern`. CJK, Arabic, and other non-Latin scripts are silently removed because pdflatex cannot render them without specialized packages. This only affects LaTeX/PDF output; JSON and DOCX preserve all Unicode.
+- **Escaping is shared** with tamu-scholars: `latex_text.py` is a verbatim copy of coe-data-core's `coe_core.latex` (written by its `just vendor-set`, drift-tested there; never edit it here). `escape_latex()` (structured fields) and `escape_latex_smart()` (titles, biography: HTML tags with their nesting kept, `$...$` math kept only if base LaTeX can set it) keep every character pdflatex sets with the report preamble — Latin-1, Latin Extended-A, dashes, curly quotes, ellipsis — map Greek, sub/superscripts and common math symbols to LaTeX, and drop the rest (CJK, Arabic, Cyrillic). Probed 2026-11-12 over both caches: every title, name and venue compiles. JSON and DOCX keep all Unicode.
+- **No data, no file** (the faculty-profiles section contract): no ORCID on file, or a record with nothing for the section, exits 0 and writes nothing. A failed refetch uses the cached record, with a warning; with no cached record the section fails (exit 2). Under `--no-fetch` a mapped ORCID with no cache file also fails (exit 2, "run `just prefetch`"): a gap in the cache is not "no data".
 - DOI links preserved and formatted as hyperlinks
 - Period filtering via the shared flags `--year` (fiscal), `--acad_year`, `--cal_year`, `--semester` (see Options)

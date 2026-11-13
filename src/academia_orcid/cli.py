@@ -33,7 +33,7 @@ from academia_orcid.fetch import (
     get_orcid_for_uin,
     validate_orcid_id,
 )
-from academia_orcid.latex import generate_data_latex, generate_latex, generate_unavailable_latex
+from academia_orcid.latex import generate_data_latex, generate_latex
 from academia_orcid.periods import Period, add_period_args, period_from_args
 
 
@@ -64,15 +64,6 @@ def resolve_period(args: argparse.Namespace) -> Period:
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
-
-
-def _write_unavailable(output_path: Path, output_filename: str, section: str, reason: str, logger: logging.Logger):
-    """Write a placeholder LaTeX file when ORCID data is unavailable."""
-    output_path.mkdir(parents=True, exist_ok=True)
-    section_file = output_path / output_filename
-    section_file.write_text(generate_unavailable_latex(section, reason))
-    logger.info(f"Generated (placeholder): {section_file}")
-    print(str(section_file))
 
 
 def main():
@@ -205,25 +196,26 @@ def main():
         dept = None
 
         if not orcid_id:
-            reason = "No ORCID ID on file for this faculty member."
-            logger.warning(f"No ORCID ID found for UIN {uin}; writing placeholder.")
-            _write_unavailable(output_path, output_filename, section, reason, logger)
+            # No data for this section: no file (section contract rule 5; audit ORC-04).
+            logger.info(f"No ORCID ID on file for UIN {uin}; no {section} section.")
             return
 
         logger.info(f"Found ORCID {orcid_id} for UIN {uin}")
 
-    # Load ORCID record from cache, or fetch from API if not cached
+    # Load ORCID record from cache, or fetch from API if not cached. A failed
+    # refetch falls back to a cached record (get_or_fetch_orcid_record); with none,
+    # the section fails (exit 2) and writes nothing (audit ORC-04).
     try:
         record = get_or_fetch_orcid_record(data_path, orcid_id, dept, fetch=fetch_enabled, force=force_fetch)
     except OrcidFetchError as e:
-        reason = f"ORCID API fetch failed for {orcid_id}: {e}"
-        logger.error(reason)
-        _write_unavailable(output_path, output_filename, section, reason, logger)
+        logger.error(f"ORCID API fetch failed for {orcid_id}: {e}")
         sys.exit(2)
     if not record:
-        reason = f"ORCID record unavailable for {orcid_id}."
-        logger.warning(f"No ORCID record found for {orcid_id}; writing placeholder.")
-        _write_unavailable(output_path, output_filename, section, reason, logger)
+        if not fetch_enabled:
+            # Under --no-fetch, a missing record is a gap in the cache, not "no data".
+            logger.error(f"ORCID record for {orcid_id} is not cached; run `just prefetch`.")
+            sys.exit(2)
+        logger.info(f"No ORCID record for {orcid_id}; no {section} section.")
         return
 
     if section == SECTION_PUBLICATIONS:

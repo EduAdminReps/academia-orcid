@@ -1,13 +1,15 @@
-"""Tests for academia_orcid.normalize module."""
+"""Tests for academia_orcid.normalize: the vendored coe_core.latex as this repo uses it.
+
+The rules themselves are tested upstream (coe-data-core tests/test_latex.py); these
+pin what the publication sections rely on, including the nested-tag titles that
+used to break pdflatex (audit ORC-05 / SCH-01).
+"""
 
 from academia_orcid.normalize import (
-    strip_html_tags,
-    html_to_latex,
-    escape_latex_smart,
     clean_for_plaintext,
-    _split_math_regions,
+    escape_latex_smart,
+    strip_html_tags,
 )
-
 
 # ── strip_html_tags ──────────────────────────────────────────────────────
 
@@ -61,106 +63,94 @@ def test_strip_collapses_whitespace():
     assert "  " not in result
 
 
-# ── html_to_latex ────────────────────────────────────────────────────────
+# ── tags (escape_latex_smart) ────────────────────────────────────────────────────────
 
 
-def test_html_to_latex_italic():
-    assert html_to_latex("<i>in vitro</i>") == r"\textit{in vitro}"
+def test_escape_latex_smart_italic():
+    assert escape_latex_smart("<i>in vitro</i>") == r"\textit{in vitro}"
 
 
-def test_html_to_latex_em():
-    assert html_to_latex("<em>E. coli</em>") == r"\textit{E. coli}"
+def test_escape_latex_smart_em():
+    assert escape_latex_smart("<em>E. coli</em>") == r"\textit{E. coli}"
 
 
-def test_html_to_latex_subscript():
-    assert html_to_latex("CO<sub>2</sub>") == r"CO\textsubscript{2}"
+def test_escape_latex_smart_subscript():
+    assert escape_latex_smart("CO<sub>2</sub>") == r"CO\textsubscript{2}"
 
 
-def test_html_to_latex_inf():
-    assert html_to_latex("CO<inf>2</inf>") == r"CO\textsubscript{2}"
+def test_escape_latex_smart_inf():
+    assert escape_latex_smart("CO<inf>2</inf>") == r"CO\textsubscript{2}"
 
 
-def test_html_to_latex_superscript():
-    assert html_to_latex("x<sup>2</sup>") == r"x\textsuperscript{2}"
+def test_escape_latex_smart_superscript():
+    assert escape_latex_smart("x<sup>2</sup>") == r"x\textsuperscript{2}"
 
 
-def test_html_to_latex_scp():
-    assert html_to_latex("<scp>PAAm</scp>") == r"\textsc{PAAm}"
+def test_escape_latex_smart_scp():
+    assert escape_latex_smart("<scp>PAAm</scp>") == r"\textsc{PAAm}"
 
 
-def test_html_to_latex_bold():
-    assert html_to_latex("<b>important</b>") == r"\textbf{important}"
+def test_escape_latex_smart_bold():
+    assert escape_latex_smart("<b>important</b>") == r"\textbf{important}"
 
 
-def test_html_to_latex_strong():
-    assert html_to_latex("<strong>key</strong>") == r"\textbf{key}"
+def test_escape_latex_smart_strong():
+    assert escape_latex_smart("<strong>key</strong>") == r"\textbf{key}"
 
 
-def test_html_to_latex_remaining_stripped():
-    result = html_to_latex('<mml:math>content</mml:math>')
+def test_escape_latex_smart_remaining_stripped():
+    result = escape_latex_smart('<mml:math>content</mml:math>')
     assert '<' not in result
     assert 'content' in result
 
 
-def test_html_to_latex_no_tags():
-    assert html_to_latex("plain text") == "plain text"
+def test_escape_latex_smart_no_tags():
+    assert escape_latex_smart("plain text") == "plain text"
 
 
-def test_html_to_latex_chemical_formula():
+def test_escape_latex_smart_chemical_formula():
     text = "Mg<sub>2</sub>Si<sub>x</sub>Sn<sub>1-x</sub>"
-    result = html_to_latex(text)
+    result = escape_latex_smart(text)
     assert r"\textsubscript{2}" in result
     assert r"\textsubscript{x}" in result
     assert r"\textsubscript{1-x}" in result
 
 
-def test_html_to_latex_empty():
-    assert html_to_latex("") == ""
+def test_escape_latex_smart_empty():
+    assert escape_latex_smart("") == ""
 
 
-def test_html_to_latex_none():
-    assert html_to_latex(None) is None
+def test_escape_latex_smart_none():
+    assert escape_latex_smart(None) == ""
 
 
-# ── _split_math_regions ──────────────────────────────────────────────────
+# ── nesting, specials inside tags, stray dollars (audit ORC-05 / SCH-01) ──
 
 
-def test_split_no_math():
-    result = _split_math_regions("plain text")
-    assert result == [(False, "plain text")]
+def test_nested_tags_keep_balanced_braces():
+    assert escape_latex_smart("CO<i><sub>2</sub></i> capture") == (
+        r"CO\textit{\textsubscript{2}} capture"
+    )
+    assert escape_latex_smart("<sub><i>x</i></sub> y") == r"\textsubscript{\textit{x}} y"
 
 
-def test_split_inline_math():
-    result = _split_math_regions("text $x^2$ more")
-    assert len(result) == 3
-    assert result[0] == (False, "text ")
-    assert result[1] == (True, "$x^2$")
-    assert result[2] == (False, " more")
+def test_specials_inside_tags_are_escaped():
+    assert escape_latex_smart("<i>R&D_x</i> 50%") == r"\textit{R\&D\_x} 50\%"
 
 
-def test_split_multiple_math():
-    result = _split_math_regions("Ni$_{3}$Sn$_{4}$")
-    math_parts = [s for is_math, s in result if is_math]
-    assert len(math_parts) == 2
-    assert "$_{3}$" in math_parts
-    assert "$_{4}$" in math_parts
+def test_unclosed_and_stray_tags():
+    assert escape_latex_smart("<i>open") == r"\textit{open}"
+    assert escape_latex_smart("stray</i> close") == "stray close"
 
 
-def test_split_math_at_start():
-    result = _split_math_regions("$\\alpha$ decay")
-    assert result[0] == (True, "$\\alpha$")
-    assert result[1] == (False, " decay")
+def test_lone_dollar_is_escaped():
+    assert escape_latex_smart("price is $50") == r"price is \$50"
 
 
-def test_split_math_at_end():
-    result = _split_math_regions("value of $k$")
-    assert result[-1] == (True, "$k$")
-
-
-def test_split_unmatched_dollar():
-    """Lone $ sign should stay in non-math text."""
-    result = _split_math_regions("price is $50")
-    assert all(not is_math for is_math, _ in result)
+def test_braces_always_balance():
+    for title in ["<i>a<sub>b</i>c</sub>", "<b><i>x</b>", "</sub></i>", "a <sup>2"]:
+        latex = escape_latex_smart(title).replace(r"\{", "").replace(r"\}", "")
+        assert latex.count("{") == latex.count("}"), title
 
 
 # ── escape_latex_smart ───────────────────────────────────────────────────
