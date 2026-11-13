@@ -69,17 +69,24 @@ class TestFetchReason:
         assert pf.fetch_reason({"_cache_metadata": FRESH}, TTL, force=False) is None
         assert pf.fetch_reason({"_cache_metadata": FRESH}, TTL, force=True) == "forced"
 
+    def test_partial_record_is_fetched_again(self):
+        partial = {**FRESH, "missing_work_details": 3}
+        assert pf.fetch_reason({"_cache_metadata": partial}, TTL, force=False) == "partial"
+
 
 class TestPrefetch:
     @pytest.fixture
     def calls(self, monkeypatch):
         calls = []
 
-        def fake_fetch(orcid, data_dir, dept=None):
+        def fake_fetch(orcid, data_dir):
             calls.append(orcid)
             if orcid.endswith("9999"):
                 raise OrcidFetchError("HTTP 503")
-            return {"activities-summary": {"works": {"group": [{}, {}]}}}
+            record = {"activities-summary": {"works": {"group": [{}, {}]}}}
+            if orcid.endswith("8888"):  # one work detail failed
+                record["_cache_metadata"] = {**FRESH, "missing_work_details": 1}
+            return record
 
         monkeypatch.setattr(pf, "fetch_orcid_record", fake_fetch)
         return calls
@@ -110,6 +117,12 @@ class TestPrefetch:
         assert calls == ["0000-0001-0000-9999", "0000-0002-0000-0002"]
         assert counts["failed"] == 1 and counts["fetched"] == 1
 
+    def test_missing_details_counted_partial(self, tmp_path, calls, caplog):
+        pairs = [("1", "0000-0001-0000-8888"), ("2", "0000-0002-0000-0002")]
+        counts = pf.prefetch(pairs, tmp_path)
+        assert counts["fetched"] == 2 and counts["partial"] == 1
+        assert "1 without details" in caplog.text
+
     def test_invalid_id_is_skipped(self, tmp_path, calls):
         counts = pf.prefetch([("1", "../../etc/passwd")], tmp_path)
         assert calls == []
@@ -120,7 +133,7 @@ class TestMain:
     def test_exit_code_reflects_failures(self, tmp_path, monkeypatch):
         db = _db(tmp_path, [("111111111", "0000-0001-0000-9999")])
 
-        def boom(orcid, data_dir, dept=None):
+        def boom(orcid, data_dir):
             raise OrcidFetchError("HTTP 503")
 
         monkeypatch.setattr(pf, "fetch_orcid_record", boom)
@@ -133,6 +146,12 @@ class TestMain:
 
     def test_missing_db(self, tmp_path):
         assert pf.main(["--mapping-db", str(tmp_path / "nope.db")]) == 1
+
+    def test_pre_v17_db_exits_1(self, tmp_path, caplog):
+        old = tmp_path / "old.db"
+        sqlite3.connect(old).close()
+        assert pf.main(["--mapping-db", str(old), "--data-dir", str(tmp_path)]) == 1
+        assert "schema v17" in caplog.text
 
     def test_unknown_department_fails(self, tmp_path):
         db = _db(tmp_path, [("111111111", "0000-0001-0000-0001")])

@@ -20,7 +20,7 @@ except ImportError:
 
 
 # Default configuration values
-DEFAULT_CONFIG = {
+DEFAULT_CONFIG: dict[str, dict[str, Any]] = {
     "api": {
         "base_url": "https://pub.orcid.org/v3.0",
         "timeout": 60,

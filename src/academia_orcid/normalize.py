@@ -7,7 +7,7 @@ coe-data-core with `just vendor-set`), one copy shared with tamu-scholars:
 - escape_latex_smart()  -- LaTeX output: HTML tags and $...$ math to LaTeX, the
                            tags' content escaped and their nesting kept (audit
                            ORC-05), characters pdflatex cannot set dropped
-- clean_for_plaintext() -- JSON/DOCX output: strip HTML, Unicode sub/superscripts
+- clean_for_plaintext() -- JSON output (the Word report reads it): strip HTML, Unicode sub/superscripts
 """
 
 from academia_orcid.latex_text import clean_for_plaintext, markup_to_latex, strip_html_tags

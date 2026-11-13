@@ -5,6 +5,7 @@ from academia_orcid.latex import (
     format_date_range,
     generate_data_latex,
     generate_latex,
+    generate_latex_summary,
     sanitize_url_for_latex,
 )
 
@@ -72,11 +73,22 @@ def test_generate_latex_publications():
                     "venue": "ICASSP", "doi": ""}]
     result = generate_latex("0000-0001-2345-6789", journals, conferences, [])
 
-    assert r"\section{ORCID Publications}" in result
+    assert r"\section{" not in result  # the composer template writes it (ORC-03)
     assert r"\subsection{Journal Articles}" in result
     assert r"\subsection{Conference Papers}" in result
-    assert "0000-0001-2345-6789" in result
     assert "10.1109/test" in result
+
+
+def test_generate_latex_summary_link_and_counts():
+    journals = [{"year": "2024", "title": "A"}, {"year": "2023", "title": "B"}]
+    result = generate_latex_summary("0000-0001-2345-6789", journals, [], [{"title": "C"}])
+
+    assert r"\href{https://orcid.org/0000-0001-2345-6789}{0000-0001-2345-6789}" in result
+    assert "Journal Articles: 2" in result
+    assert "Other Publications: 1" in result
+    assert "Conference Papers" not in result
+    assert "period considered" not in result
+    assert r"\section{" not in result
 
 
 def test_generate_latex_empty():
@@ -104,7 +116,8 @@ def test_generate_data_latex_sections():
         services=[],
     )
 
-    assert r"\section{ORCID Data}" in result
+    assert r"\section{" not in result  # the composer template writes it (ORC-03)
+    assert "https://orcid.org/0000-0001-2345-6789" in result
     assert r"\subsection{Biography}" in result
     assert r"\subsection{Employment}" in result
     assert r"\subsection{Selected Projects}" in result

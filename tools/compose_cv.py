@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """Standalone ORCID CV Composer — generates complete CVs from ORCID data.
 
-Produces LaTeX/PDF or DOCX documents using only public ORCID data, without
+Produces a LaTeX/PDF CV or a BibTeX file using only public ORCID data, without
 requiring the parent tamu-coe-faculty-profiles composer or privileged data.
 
-Derived from tamu-coe-faculty-profiles/compose_latex.py and compose_docx.py.
-See CLAUDE.md "Standalone CV Tool" section for upstream sync policy.
+Adapted from tamu-coe-faculty-profiles/compose_latex.py (templates, compilation,
+archiving); maintained here, not synced (see CLAUDE.md "Standalone CV Tool").
 
 Usage:
     python tools/compose_cv.py --orcid 0000-0003-0831-6109
-    python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format docx
     python tools/compose_cv.py --orcid 0000-0003-0831-6109 --cal_year 2020-2025
     python tools/compose_cv.py --orcid 0000-0003-0831-6109 --skip-compile
+    python tools/compose_cv.py --orcid 0000-0003-0831-6109 --format bibtex
+
+Exit codes: 0 done; 1 bad input or failed compilation; 2 the ORCID record could
+not be fetched and none is cached (or, under --no-fetch, none is cached).
 """
 
 import argparse
@@ -21,14 +24,18 @@ import shutil
 import subprocess
 import sys
 import zipfile
-from datetime import datetime, timezone
 from pathlib import Path
 
 # Ensure the package is importable (handles running from tools/ directory)
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 
-from academia_orcid.config import get_config
+from academia_orcid import (
+    OUTPUT_DATA_TEX,
+    OUTPUT_PUBLICATIONS_SUMMARY_TEX,
+    OUTPUT_PUBLICATIONS_TEX,
+)
+from academia_orcid.cli import resolve_period
 from academia_orcid.extract import (
     extract_biography,
     extract_distinctions,
@@ -42,20 +49,21 @@ from academia_orcid.extract import (
     filter_publications_by_period,
 )
 from academia_orcid.fetch import (
+    OrcidFetchError,
     get_or_fetch_orcid_record,
     validate_orcid_id,
 )
-from academia_orcid.json_export import export_data, export_publications
 from academia_orcid.latex import (
     escape_latex,
     generate_data_latex,
     generate_latex,
+    generate_latex_summary,
 )
 from academia_orcid.logging_config import setup_logging
-from academia_orcid.cli import resolve_period
 from academia_orcid.periods import add_period_args
 
-logger = logging.getLogger("compose_cv")
+# Under the academia_orcid logger tree, which setup_logging configures (ORC-15).
+logger = logging.getLogger("academia_orcid.compose_cv")
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 DEFAULT_OUTPUT_BASE = _REPO_ROOT / "out_cv"
@@ -145,33 +153,47 @@ def generate_main(display_year: str, template_path: Path, output_path: Path):
     output_path.write_text(content)
 
 
+# What one LaTeX run writes into the output directory. Only these are removed
+# or archived: --output-dir may be a folder holding other files (audit ORC-08).
+LATEX_SOURCES = ["preamble.tex", "header.tex", "main.tex"]
+FRAGMENTS = [OUTPUT_DATA_TEX, OUTPUT_PUBLICATIONS_TEX, OUTPUT_PUBLICATIONS_SUMMARY_TEX]
+LATEX_BYPRODUCTS = [".aux", ".log", ".out", ".toc", ".lof", ".lot",
+                    ".fls", ".fdb_latexmk", ".synctex.gz"]
+
+
+def _unlink(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def cleanup_latex_byproducts(output_dir: Path):
-    """Remove LaTeX compilation byproducts."""
-    extensions = [".aux", ".log", ".out", ".toc", ".lof", ".lot",
-                  ".fls", ".fdb_latexmk", ".synctex.gz"]
-    for ext in extensions:
-        for f in output_dir.glob(f"*{ext}"):
-            try:
-                f.unlink()
-            except OSError:
-                pass
+    """Remove main.tex's compilation byproducts (main.aux, main.log, ...)."""
+    for ext in LATEX_BYPRODUCTS:
+        _unlink(output_dir / f"main{ext}")
+
+
+def remove_stale_outputs(output_dir: Path, report_id: str):
+    """Remove an earlier run's fragments, PDF and archive (and nothing else).
+
+    A fragment is written only when it has data, so one left from an earlier run
+    would otherwise be compiled into this run's CV (audit ORC-08).
+    """
+    for name in FRAGMENTS:
+        _unlink(output_dir / name)
+    for name in (f"{report_id}-cv.pdf", f"{report_id}-source.zip", "main.pdf"):
+        _unlink(output_dir / name)
+    cleanup_latex_byproducts(output_dir)
 
 
 def create_source_archive(output_dir: Path, report_id: str) -> Path:
-    """Create a zip archive of source files."""
-    # Clean byproducts and old PDFs/zips before archiving
-    for ext in [".aux", ".log", ".out", ".toc", ".lof", ".lot",
-                ".fls", ".fdb_latexmk", ".synctex.gz", ".pdf", ".zip"]:
-        for f in output_dir.glob(f"*{ext}"):
-            try:
-                f.unlink()
-            except OSError:
-                pass
-
+    """Zip this run's LaTeX sources (templates and the fragments written)."""
     zip_path = output_dir / f"{report_id}-source.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in output_dir.iterdir():
-            if f.is_file() and f.suffix != ".zip":
+        for name in LATEX_SOURCES + FRAGMENTS:
+            f = output_dir / name
+            if f.is_file():
                 zf.write(f, f.name)
     return zip_path
 
@@ -206,11 +228,11 @@ def compile_latex(output_dir: Path, report_id: str) -> Path | None:
 # Shared: resolve ORCID ID and fetch record
 # ---------------------------------------------------------------------------
 
-def resolve_and_fetch(args) -> tuple[str, dict | None]:
-    """Validate ORCID ID and fetch the record.
+def resolve_and_fetch(args) -> tuple[str, dict]:
+    """Validate the ORCID ID and load its record (cached or fetched).
 
-    Returns:
-        Tuple of (orcid_id, record) or (orcid_id, None) on failure.
+    Exits 1 on a malformed ID, and 2 when no record can be had: the fetch failed
+    with nothing cached, or --no-fetch and nothing cached (ORC-15).
     """
     data_dir = Path(args.data_dir)
     orcid_id = args.orcid
@@ -218,19 +240,21 @@ def resolve_and_fetch(args) -> tuple[str, dict | None]:
     if not validate_orcid_id(orcid_id):
         logger.error(f"Invalid ORCID ID format: {orcid_id}")
         logger.error("ORCID IDs must match: XXXX-XXXX-XXXX-XXXX")
-        return orcid_id, None
+        sys.exit(1)
 
     logger.info(f"Using ORCID ID: {orcid_id}")
 
-    fetch_enabled = args.fetch
-    force_fetch = args.force_fetch
-
-    record = get_or_fetch_orcid_record(
-        data_dir, orcid_id, fetch=fetch_enabled, force=force_fetch
-    )
+    try:
+        record = get_or_fetch_orcid_record(
+            data_dir, orcid_id, fetch=args.fetch, force=args.force_fetch
+        )
+    except OrcidFetchError as e:
+        logger.error(f"ORCID API fetch failed for {orcid_id}: {e}")
+        sys.exit(2)
     if not record:
-        logger.error(f"Could not load ORCID record for {orcid_id}")
-        return orcid_id, None
+        hint = " (not cached; drop --no-fetch)" if not args.fetch else ""
+        logger.error(f"Could not load ORCID record for {orcid_id}{hint}")
+        sys.exit(2)
 
     return orcid_id, record
 
@@ -242,8 +266,6 @@ def resolve_and_fetch(args) -> tuple[str, dict | None]:
 def generate_latex_cv(args):
     """Generate a complete ORCID CV as LaTeX source and PDF."""
     orcid_id, record = resolve_and_fetch(args)
-    if not record:
-        sys.exit(1)
 
     person = extract_person_info(record)
     logger.info(f"Faculty: {person['name']}")
@@ -267,6 +289,7 @@ def generate_latex_cv(args):
         return
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    remove_stale_outputs(output_dir, orcid_id)
 
     # Copy preamble
     preamble_src = TEMPLATES_DIR / "preamble.tex"
@@ -302,8 +325,8 @@ def generate_latex_cv(args):
         employments, educations, distinctions, memberships, services
     )
     if data_latex:
-        (output_dir / "orcid-data.tex").write_text(data_latex)
-        logger.info("  Created: orcid-data.tex")
+        (output_dir / OUTPUT_DATA_TEX).write_text(data_latex)
+        logger.info(f"  Created: {OUTPUT_DATA_TEX}")
 
     # Generate orcid-publications.tex
     logger.info("Generating publications section...")
@@ -320,8 +343,11 @@ def generate_latex_cv(args):
 
     pubs_latex = generate_latex(orcid_id, journal_articles, conference_papers, other_publications)
     if pubs_latex:
-        (output_dir / "orcid-publications.tex").write_text(pubs_latex)
-        logger.info("  Created: orcid-publications.tex")
+        (output_dir / OUTPUT_PUBLICATIONS_TEX).write_text(pubs_latex)
+        (output_dir / OUTPUT_PUBLICATIONS_SUMMARY_TEX).write_text(
+            generate_latex_summary(orcid_id, journal_articles, conference_papers, other_publications)
+        )
+        logger.info(f"  Created: {OUTPUT_PUBLICATIONS_TEX}, {OUTPUT_PUBLICATIONS_SUMMARY_TEX}")
 
     # Generate main.tex
     generate_main(display_year, TEMPLATES_DIR / "main.tex.template",
@@ -348,104 +374,6 @@ def generate_latex_cv(args):
 
 
 # ---------------------------------------------------------------------------
-# DOCX pipeline
-# ---------------------------------------------------------------------------
-
-def generate_docx_cv(args):
-    """Generate a complete ORCID CV as a Word document."""
-    try:
-        from tools.docx_formatter import OrcidDocxFormatter
-    except ImportError:
-        try:
-            # Handle running from repo root vs tools/ directory
-            from docx_formatter import OrcidDocxFormatter
-        except ImportError:
-            logger.error(
-                "DOCX output requires python-docx. Install with: pip install python-docx"
-            )
-            sys.exit(1)
-
-    orcid_id, record = resolve_and_fetch(args)
-    if not record:
-        sys.exit(1)
-
-    person = extract_person_info(record)
-    logger.info(f"Faculty: {person['name']}")
-
-    # Report period (publications only)
-    period = resolve_period(args)
-    year_display = None if period.is_all else period.label()
-    if year_display:
-        logger.info(f"Period: {year_display}")
-
-    # Output directory
-    output_dir = Path(args.output_dir) if args.output_dir else DEFAULT_OUTPUT_BASE / orcid_id
-
-    if args.dry_run:
-        logger.info(f"[dry-run] Would create: {output_dir}")
-        logger.info(f"[dry-run] Would generate DOCX CV for {person['name']}")
-        return
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Extract all data
-    biography = extract_biography(record)
-    external_identifiers = extract_external_identifiers(record)
-    fundings = extract_fundings(record)
-    employments = extract_employments(record)
-    educations = extract_educations(record)
-    distinctions = extract_distinctions(record)
-    memberships = extract_memberships(record)
-    services = extract_services(record)
-
-    journal_articles, conference_papers, other_publications = extract_publications(record)
-    journal_articles = filter_publications_by_period(journal_articles, period)
-    conference_papers = filter_publications_by_period(conference_papers, period)
-    other_publications = filter_publications_by_period(other_publications, period)
-
-    # Optional DOI enrichment
-    journal_articles, conference_papers, other_publications = _maybe_enrich(
-        args, journal_articles, conference_papers, other_publications
-    )
-
-    # Build JSON data
-    data_json = export_data(
-        orcid_id, biography, external_identifiers, fundings,
-        employments, educations, distinctions, memberships, services
-    )
-    pubs_json = export_publications(
-        orcid_id, journal_articles, conference_papers, other_publications
-    )
-
-    # Assemble profile (matching composer's build_profile() structure)
-    profile = {
-        "_meta": {
-            "uin": orcid_id,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "year_filter": year_display,
-        },
-        "identity": {
-            "name": person["name"],
-            "department_name": person["department"],
-            "identifier_label": "ORCID",
-            "identifier_value": orcid_id,
-            "institution": person["institution"],
-            "college": "",
-        },
-    }
-    if data_json:
-        profile["orcid_data"] = data_json
-    if pubs_json:
-        profile["orcid_publications"] = pubs_json
-
-    # Format
-    formatter = OrcidDocxFormatter()
-    paths = formatter.format(profile, output_dir)
-    for p in paths:
-        logger.info(f"DOCX: {p}")
-
-
-# ---------------------------------------------------------------------------
 # BibTeX pipeline
 # ---------------------------------------------------------------------------
 
@@ -454,8 +382,6 @@ def generate_bibtex_cv(args):
     from academia_orcid.bibtex_export import export_bibtex
 
     orcid_id, record = resolve_and_fetch(args)
-    if not record:
-        sys.exit(1)
 
     person = extract_person_info(record)
     logger.info(f"Faculty: {person['name']}")
@@ -474,6 +400,8 @@ def generate_bibtex_cv(args):
         return
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    bib_path = output_dir / f"{orcid_id}.bib"
+    _unlink(bib_path)  # an earlier run's file must not pass for this period's
 
     # Extract publications
     journal_articles, conference_papers, other_publications = extract_publications(record)
@@ -496,7 +424,6 @@ def generate_bibtex_cv(args):
         logger.info("No publications found; skipping .bib file creation.")
         return
 
-    bib_path = output_dir / f"{orcid_id}.bib"
     bib_path.write_text(bibtex_content, encoding="utf-8")
     logger.info(f"BibTeX: {bib_path}")
 
@@ -505,10 +432,10 @@ def generate_bibtex_cv(args):
 # CLI
 # ---------------------------------------------------------------------------
 
-def parse_args():
+def parse_args(argv: list[str] | None = None):
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Generate a standalone ORCID-based CV (LaTeX/PDF, DOCX, or BibTeX)."
+        description="Generate a standalone ORCID-based CV (LaTeX/PDF or BibTeX)."
     )
 
     # Identification
@@ -517,7 +444,7 @@ def parse_args():
 
     # Format
     parser.add_argument(
-        "--format", default="latex", choices=["latex", "docx", "bibtex"],
+        "--format", default="latex", choices=["latex", "bibtex"],
         help="Output format (default: latex)"
     )
 
@@ -554,12 +481,12 @@ def parse_args():
     parser.add_argument("--log-file", default=None,
                         help="Log to file instead of stderr")
 
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-def main():
+def main(argv: list[str] | None = None):
     """Entry point."""
-    args = parse_args()
+    args = parse_args(argv)
 
     # Setup logging
     log_file = Path(args.log_file) if args.log_file else None
@@ -567,8 +494,6 @@ def main():
 
     if args.format == "latex":
         generate_latex_cv(args)
-    elif args.format == "docx":
-        generate_docx_cv(args)
     elif args.format == "bibtex":
         generate_bibtex_cv(args)
 

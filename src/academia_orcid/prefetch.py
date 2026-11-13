@@ -5,9 +5,11 @@ demand. This command fills the cache ahead of time for every ORCID iD in the
 ``faculty_identifiers`` table, so report runs can pass ``--no-fetch`` and never wait
 on the ORCID API.
 
-A record is downloaded when it is missing, unreadable, or older than the cache
-TTL (``cache.ttl_seconds``, 7 days by default); fresh records are skipped.
-Records are written one at a time, so an interrupted run can simply be rerun.
+A record is downloaded when it is missing, unreadable, older than the cache
+TTL (``cache.ttl_seconds``, 7 days by default), or was cached with some work
+details missing (``partial``); complete fresh records are skipped. Each record
+is written whole (a temporary file renamed over the old one), so an interrupted
+run can simply be rerun.
 
 Usage (through the justfile, which supplies --mapping-db):
     just prefetch                          # every mapped ORCID iD
@@ -38,6 +40,7 @@ from .fetch import (
     fetch_orcid_record,
     is_cache_fresh,
     load_orcid_record,
+    missing_work_details,
     validate_orcid_id,
 )
 from .logging_config import setup_logging
@@ -135,11 +138,13 @@ def selected_uins(
 
 
 def fetch_reason(record: dict | None, ttl_seconds: int, force: bool) -> str | None:
-    """Why a cached record must be downloaded again, or None if it is fresh."""
+    """Why a cached record must be downloaded again, or None if it is complete and fresh."""
     if force:
         return "forced"
     if record is None:
         return "missing"
+    if missing_work_details(record):
+        return "partial"  # some work details failed last time (audit ORC-09)
     if not is_cache_fresh(record, ttl_seconds):
         return "stale"
     return None
@@ -155,7 +160,9 @@ def prefetch(
     """Fill the cache for each (UIN, ORCID) pair; return outcome counts.
 
     Outcomes: ``fresh`` (skipped), ``fetched``, ``would-fetch`` (dry run),
-    ``failed`` (API error), ``invalid`` (malformed ORCID iD in the mapping).
+    ``failed`` (API error), ``invalid`` (malformed ORCID iD in the mapping), and
+    ``partial`` (fetched, but some work details could not be downloaded; also
+    counted as ``fetched``, and refetched next run).
     """
     ttl = get_config().cache_ttl
     counts: Counter = Counter()
@@ -193,8 +200,13 @@ def prefetch(
             continue
 
         n_works = len(record.get("activities-summary", {}).get("works", {}).get("group", []))
-        logger.info(f"{tag}: fetched ({reason}), {n_works} works")
+        missing = missing_work_details(record)
         counts["fetched"] += 1
+        if missing:
+            counts["partial"] += 1
+            logger.warning(f"{tag}: fetched ({reason}), {n_works} works, {missing} without details")
+        else:
+            logger.info(f"{tag}: fetched ({reason}), {n_works} works")
 
         if delay and i < total:
             time.sleep(delay)
@@ -203,7 +215,7 @@ def prefetch(
 
 
 def _summary(counts: Counter) -> str:
-    order = ["fetched", "would-fetch", "fresh", "failed", "invalid"]
+    order = ["fetched", "partial", "would-fetch", "fresh", "failed", "invalid"]
     return ", ".join(f"{counts[k]} {k}" for k in order if counts[k])
 
 
@@ -246,10 +258,13 @@ def main(argv: list[str] | None = None, default_data_dir: Path | None = None) ->
 
     try:
         wanted = selected_uins(db_path, args.uin, args.uin_file, args.dept)
+        pairs = load_mapped_orcids(db_path, wanted)
     except (OSError, ValueError) as e:
         logger.error(str(e))
         return 1
-    pairs = load_mapped_orcids(db_path, wanted)
+    except sqlite3.Error as e:
+        logger.error(f"Cannot read {db_path} ({e}); en.db schema v17 or later is needed")
+        return 1
     if wanted is not None:
         logger.info(f"{len(wanted)} UINs selected, {len(pairs)} with an ORCID iD")
     data_dir = Path(args.data_dir)

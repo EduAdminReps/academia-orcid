@@ -53,7 +53,8 @@ def fetch_doi_metadata(doi: str, timeout: int = 10) -> dict | None:
         logger.warning(f"DOI lookup timed out: {doi}")
         return None
     except requests.exceptions.HTTPError as e:
-        logger.warning(f"DOI lookup HTTP error for {doi}: {e.response.status_code}")
+        status = e.response.status_code if e.response is not None else "?"
+        logger.warning(f"DOI lookup HTTP error for {doi}: {status}")
         return None
     except (requests.exceptions.RequestException, ValueError) as e:
         logger.warning(f"DOI lookup failed for {doi}: {e}")

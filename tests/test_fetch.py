@@ -11,8 +11,9 @@ from academia_orcid.fetch import (
     fetch_orcid_record,
     fetch_work_details,
     get_orcid_for_uin,
+    is_cache_fresh,
     load_orcid_record,
-    sanitize_dept,
+    missing_work_details,
     validate_orcid_id,
 )
 
@@ -58,6 +59,26 @@ def test_get_orcid_for_uin_not_found(tmp_mapping_db):
 def test_get_orcid_for_uin_no_orcid_row(tmp_mapping_db):
     result = get_orcid_for_uin(tmp_mapping_db, "999000000")
     assert result is None
+
+
+def test_get_orcid_for_uin_takes_rank_1_and_strips(tmp_mapping_db):
+    """Several ORCID rows: the lowest Rank wins, whatever the row order (ORC-12)."""
+    conn = sqlite3.connect(tmp_mapping_db)
+    conn.executemany("INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, ?)", [
+        ("555000000", "0000-0002-0000-0002", 2),
+        ("555000000", " 0000-0001-0000-0001 ", 1),
+    ])
+    conn.commit()
+    conn.close()
+    assert get_orcid_for_uin(tmp_mapping_db, "555000000") == "0000-0001-0000-0001"
+
+
+def test_get_orcid_for_uin_pre_v17_db_raises(tmp_path):
+    """An en.db without faculty_identifiers raises (the CLIs turn it into exit 1)."""
+    db = tmp_path / "old.db"
+    sqlite3.connect(db).close()
+    with pytest.raises(sqlite3.OperationalError):
+        get_orcid_for_uin(db, "123456789")
 
 
 # ── load_orcid_record ──────────────────────────────────────────────────────
@@ -109,41 +130,6 @@ def test_validate_orcid_id_wrong_type():
     assert validate_orcid_id(["0000-0001-2345-6789"]) is False
 
 
-# ── SECURITY: Department sanitization ─────────────────────────────────────
-
-
-def test_sanitize_dept_valid():
-    """Test valid department codes are accepted."""
-    assert sanitize_dept("CSCE") == "CSCE"
-    assert sanitize_dept("MEEN") == "MEEN"
-    assert sanitize_dept("dept-123") == "dept-123"
-    assert sanitize_dept("dept_test") == "dept_test"
-
-
-def test_sanitize_dept_path_traversal():
-    """Test path traversal attempts are rejected."""
-    assert sanitize_dept("../../../etc") is None
-    assert sanitize_dept("../../sensitive") is None
-    assert sanitize_dept("..") is None
-    assert sanitize_dept(".") is None
-    assert sanitize_dept("./subdir") is None
-
-
-def test_sanitize_dept_special_chars():
-    """Test special characters are rejected."""
-    assert sanitize_dept("dept/subdir") is None
-    assert sanitize_dept("dept\\subdir") is None
-    assert sanitize_dept("dept;command") is None
-    assert sanitize_dept("dept\x00null") is None
-    assert sanitize_dept("dept space") is None
-
-
-def test_sanitize_dept_empty():
-    """Test empty/None values return None."""
-    assert sanitize_dept("") is None
-    assert sanitize_dept(None) is None
-
-
 # ── SECURITY: Path traversal protection in load_orcid_record ──────────────
 
 
@@ -151,14 +137,6 @@ def test_load_orcid_record_rejects_invalid_orcid(tmp_data_dir):
     """Test that load_orcid_record rejects invalid ORCID IDs."""
     record = load_orcid_record(tmp_data_dir, "../../../etc/passwd")
     assert record is None
-
-
-def test_load_orcid_record_sanitizes_dept(tmp_data_dir):
-    """Test that load_orcid_record sanitizes department parameter."""
-    # Invalid dept should be sanitized to None, falling back to flat structure
-    record = load_orcid_record(tmp_data_dir, "0000-0001-2345-6789", dept="../../../etc")
-    # Should still work if file exists in flat structure
-    assert record is not None  # From tmp_data_dir fixture
 
 
 # ── SECURITY: Missing cache directory ─────────────────────────────────────
@@ -435,21 +413,90 @@ def test_fetch_orcid_record_with_works(mock_requests, tmp_path):
     assert mock_requests.get.call_count == 2
 
 
+# ── Whole cache writes, partial work details (audit ORC-09) ─────────────────
+
+
+def _main_record(put_codes):
+    return {
+        "person": {},
+        "activities-summary": {"works": {"group": [
+            {"work-summary": [{"put-code": pc, "title": {"title": {"value": f"S{pc}"}}}]}
+            for pc in put_codes
+        ]}},
+    }
+
+
+def _response(status, payload=None):
+    r = Mock()
+    r.status_code = status
+    r.json.return_value = payload
+    return r
+
+
 @patch('academia_orcid.fetch.requests')
-def test_fetch_orcid_record_hierarchical_cache(mock_requests, tmp_path):
-    """Test caching with department hierarchy."""
-    mock_response = Mock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {"person": {}, "activities-summary": {}}
-    mock_requests.get.return_value = mock_response
+def test_cache_write_replaces_the_file_whole(mock_requests, tmp_path):
+    cache = tmp_path / "ORCID_JSON" / "0000-0001-2345-6789.json"
+    cache.parent.mkdir()
+    cache.write_text('{"old": true}')
+    mock_requests.get.return_value = _response(200, {"person": {}, "activities-summary": {}})
 
-    result = fetch_orcid_record("0000-0001-2345-6789", tmp_path, dept="CSCE")
+    fetch_orcid_record("0000-0001-2345-6789", tmp_path)
 
-    assert result is not None
+    assert "old" not in json.loads(cache.read_text())
+    assert list(cache.parent.iterdir()) == [cache]  # no temporary file left
 
-    # Verify cache in department subdirectory
-    cache_file = tmp_path / "ORCID_JSON" / "CSCE" / "0000-0001-2345-6789.json"
-    assert cache_file.exists()
+
+@patch('academia_orcid.fetch.requests')
+def test_interrupted_cache_write_keeps_the_old_file(mock_requests, tmp_path, monkeypatch):
+    from academia_orcid import fetch
+
+    cache = tmp_path / "ORCID_JSON" / "0000-0001-2345-6789.json"
+    cache.parent.mkdir()
+    cache.write_text('{"old": true}')
+    mock_requests.get.return_value = _response(200, {"person": {}, "activities-summary": {}})
+
+    def interrupted(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(fetch.json, "dump", interrupted)
+    fetch_orcid_record("0000-0001-2345-6789", tmp_path)
+
+    assert json.loads(cache.read_text()) == {"old": True}
+
+
+@patch('academia_orcid.fetch.requests')
+def test_missing_work_details_make_the_record_stale(mock_requests, tmp_path):
+    detail = {"title": {"title": {"value": "Full"}}, "type": "journal-article"}
+
+    def get(url, **_kwargs):
+        if url.endswith("/record"):
+            return _response(200, _main_record([1, 2, 3]))
+        return _response(500) if url.endswith("/work/2") else _response(200, detail)
+
+    mock_requests.get.side_effect = get
+
+    record = fetch_orcid_record("0000-0001-2345-6789", tmp_path)
+
+    assert missing_work_details(record) == 1
+    assert not is_cache_fresh(record)
+    cached = load_orcid_record(tmp_path, "0000-0001-2345-6789")
+    assert missing_work_details(cached) == 1
+
+
+@patch('academia_orcid.fetch.requests')
+def test_complete_record_is_fresh(mock_requests, tmp_path):
+    detail = {"title": {"title": {"value": "Full"}}, "type": "journal-article"}
+
+    def get(url, **_kwargs):
+        return _response(200, _main_record([1, 2]) if url.endswith("/record") else detail)
+
+    mock_requests.get.side_effect = get
+
+    record = fetch_orcid_record("0000-0001-2345-6789", tmp_path)
+
+    assert missing_work_details(record) == 0
+    assert "missing_work_details" not in record["_cache_metadata"]
+    assert is_cache_fresh(record)
 
 
 # ── API MOCKING: requests unavailable ─────────────────────────────────────

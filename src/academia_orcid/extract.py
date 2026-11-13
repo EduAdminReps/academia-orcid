@@ -250,7 +250,7 @@ def extract_biography(record: dict) -> str | None:
 
 def extract_external_identifiers(record: dict) -> list[dict]:
     """Extract external identifiers (Scopus, ResearcherID, etc.) from ORCID record."""
-    identifiers = []
+    identifiers: list[dict] = []
     person = record.get("person", {})
     ext_ids = person.get("external-identifiers", {})
 
@@ -278,7 +278,7 @@ def extract_external_identifiers(record: dict) -> list[dict]:
 
 def extract_affiliation_items(record: dict, section_name: str, summary_key: str) -> list[dict]:
     """Extract items from an affiliation-based section (employments, educations, etc.)."""
-    items = []
+    items: list[dict] = []
     activities = record.get("activities-summary", {})
     section = activities.get(section_name, {})
 
@@ -355,7 +355,7 @@ def extract_services(record: dict) -> list[dict]:
 
 def extract_fundings(record: dict) -> list[dict]:
     """Extract funding/grants from ORCID record."""
-    items = []
+    items: list[dict] = []
     activities = record.get("activities-summary", {})
     fundings = activities.get("fundings", {})
 

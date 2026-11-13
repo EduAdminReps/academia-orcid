@@ -566,9 +566,9 @@ def test_cli_handles_special_characters_in_content(monkeypatch, tmp_path):
     cli.main()
 
     content = (output_dir / "orcid-publications.tex").read_text()
-    # LaTeX special chars should be escaped
-    assert r"\&" in content or "&" in content  # Depending on escape strategy
-    assert r"\$" in content or "$" in content
+    # LaTeX special chars are escaped, and no bare one is left (ORC-13)
+    assert r"Paper with \& special \$ characters" in content
+    assert "&" not in content.replace(r"\&", "")
 
 
 def test_cli_data_dir_defaults_to_current(monkeypatch, tmp_path, cached_orcid):

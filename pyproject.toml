@@ -18,14 +18,14 @@ dependencies = [
 config = [
     "pyyaml>=6.0",
 ]
-docx = [
-    "python-docx>=1.0",
-]
+
+[dependency-groups]
+# `uv run` installs these by default (just test / lint / typecheck).
 dev = [
     "pytest",
     "pyyaml>=6.0",
-    "python-docx>=1.0",
     "ruff",
+    "mypy",
 ]
 
 [project.scripts]
@@ -34,6 +34,9 @@ academia-orcid = "academia_orcid.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"
@@ -41,3 +44,19 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# These put src/ or tools/ on sys.path before importing from them.
+"tools/compose_cv.py" = ["E402"]
+"tests/test_compose_cv.py" = ["E402"]
+
+[tool.mypy]
+# `just typecheck`: the package, the tools and the entry points; the tests are
+# left out (monkeypatched, untyped). explicit_package_bases: tools/ has no
+# __init__.py.
+python_version = "3.10"
+files = ["src", "tools", "run_latex.py", "run_json.py", "run_bibtex.py", "run_prefetch.py"]
+mypy_path = "src"
+explicit_package_bases = true
+ignore_missing_imports = true
+warn_unused_ignores = true

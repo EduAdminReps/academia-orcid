@@ -6,7 +6,7 @@ This package fetches academic publication and employment data from ORCID (Open R
 
 ## Data Philosophy
 
-**ORCID as system of record.** Faculty are asked to maintain their ORCID profiles as a proxy for submitting annual CVs. All generated outputs (PDF, DOCX, BibTeX) are faithful renderings of that record. If a report entry is questioned, the answer is always "this is what's in the faculty member's ORCID profile." This creates a clean accountability boundary — the faculty member owns the data, the tool renders it.
+**ORCID as system of record.** Faculty are asked to maintain their ORCID profiles as a proxy for submitting annual CVs. All generated outputs (LaTeX/PDF, the JSON behind the composer's Word report, BibTeX) are faithful renderings of that record. If a report entry is questioned, the answer is always "this is what's in the faculty member's ORCID profile." This creates a clean accountability boundary — the faculty member owns the data, the tool renders it.
 
 **Hierarchical enrichment.** ORCID data is the baseline for all outputs. External metadata sources — DOI content negotiation (`https://doi.org/{doi}` with `Accept: application/x-bibtex`), Crossref API, DataCite — may fill gaps (volume, pages, number) but never override ORCID-provided fields (title, authors, type, venue). Enrichment is always opt-in (e.g., `--enrich` flag), not automatic. The default output reflects ORCID data only.
 
@@ -24,8 +24,14 @@ The tool renders what the sources provide. If a faculty member wants richer outp
 
 | Section | Name | Output File |
 |---------|------|-------------|
-| 9 | Publications | `orcid-publications.tex` / `orcid-publications.json` |
+| 9 | Publications | `orcid-publications.tex` (+ `orcid-publications-summary.tex`) / `orcid-publications.json` |
 | — | ORCID Data (external info) | `orcid-data.tex` / `orcid-data.json` |
+
+**Fragments carry no `\section`** (the faculty-profiles section contract): the
+composer template writes the "ORCID Data" and "ORCID Publications" headings and
+inputs `orcid-publications-summary.tex` (profile link, counts by type) under the
+second. Each fragment starts at subsection level (audit ORC-03; tamu-scholars
+does the same).
 
 ## Project Structure
 
@@ -34,7 +40,7 @@ academia-orcid/
 ├── src/
 │   └── academia_orcid/           # Installable Python package
 │       ├── __init__.py           # Package constants and version
-│       ├── cli.py                # Main entry point (argparse + orchestration)
+│       ├── cli.py                # run_latex entry point; flags, lookup and record load shared with run_json/run_bibtex
 │       ├── extract.py            # Data extraction from ORCID records
 │       ├── latex.py              # LaTeX generation (publications + data sections)
 │       ├── json_export.py        # JSON export (publications + data sections)
@@ -49,9 +55,8 @@ academia-orcid/
 │       ├── logging_config.py     # Logging setup and module logger factory
 │       └── schema.py             # TypedDict definitions for ORCID JSON
 ├── tests/                        # Test directory
-├── tools/                        # Standalone CV tools and analysis scripts
-│   ├── compose_cv.py             # Standalone ORCID CV generator (LaTeX/PDF, DOCX, BibTeX)
-│   ├── docx_formatter.py         # ORCID-only DOCX formatter
+├── tools/                        # Standalone CV tool
+│   ├── compose_cv.py             # Standalone ORCID CV generator (LaTeX/PDF, BibTeX)
 │   └── templates/                # LaTeX templates for standalone CV
 │       ├── preamble.tex          # Minimal preamble (no tikz/pgfplots)
 │       ├── header.tex.template   # Faculty header template
@@ -64,7 +69,7 @@ academia-orcid/
 ├── run_json.py                   # Thin wrapper for composer compatibility (JSON)
 ├── run_bibtex.py                 # Thin wrapper for composer compatibility (BibTeX)
 ├── run_prefetch.py               # Bulk cache fill (thin wrapper for academia_orcid.prefetch)
-├── justfile                      # `just prefetch` — the one way to fill ORCID_JSON/
+├── justfile                      # `just prefetch` (the one way to fill ORCID_JSON/), test, lint, typecheck, format, check
 ├── pyproject.toml                # Package configuration (src layout)
 └── .gitignore
 ```
@@ -86,13 +91,13 @@ Schema documentation: [src/academia_orcid/schema.py](src/academia_orcid/schema.p
 
 | Module | Purpose |
 |--------|---------|
-| `academia_orcid.cli` | `main()` entry point — argparse, orchestration |
-| `academia_orcid.fetch` | ORCID API client, JSON cache loading, UIN→ORCID mapping |
+| `academia_orcid.cli` | `main()` (run_latex), and what all three entry points share: `add_common_args`, `resolve_orcid_id`, `load_record`, `resolve_period` (one set of flags and exit codes) |
+| `academia_orcid.fetch` | ORCID API client, JSON cache (whole-file writes, partial records stale), UIN→ORCID mapping |
 | `academia_orcid.prefetch` | Bulk cache fill: every ORCID in `faculty_identifiers` → `ORCID_JSON/` |
 | `academia_orcid.extract` | Publication/data extraction, year filtering |
-| `academia_orcid.latex` | LaTeX generation (`escape_latex`, `generate_latex`, `generate_data_latex`) |
+| `academia_orcid.latex` | LaTeX generation (`escape_latex`, `generate_latex`, `generate_latex_summary`, `generate_data_latex`) |
 | `academia_orcid.json_export` | JSON export (`export_publications`, `export_data`) |
-| `academia_orcid.bibtex_export` | BibTeX export (embedded ORCID citations preferred, generated fallback) |
+| `academia_orcid.bibtex_export` | BibTeX export (embedded ORCID BibTeX preferred, generated fallback; unique keys) |
 | `academia_orcid.enrich` | DOI content negotiation enrichment (opt-in, fill-only semantics) |
 | `academia_orcid.normalize` | Text normalization (HTML→LaTeX, plaintext cleaning) |
 | `academia_orcid.config` | YAML configuration management (`Config` class, `get_config()`, env overrides) |
@@ -129,9 +134,10 @@ just prefetch --uin-file nominees.txt  # one UIN per line (# comments ok), or a 
 The scope options combine as a union; a scope that matches nobody fetches
 nothing (never "everyone"), and an unknown department is an error.
 
-- Fresh records are skipped; each record is written whole, so an interrupted run resumes on rerun.
+- Fresh complete records are skipped; each record is written whole (a temporary file renamed over the old one), so an interrupted run resumes on rerun and never leaves a truncated file (audit ORC-09).
 - One person at a time (`--delay`, default 0.2 s between people); works within a person use the existing concurrent fetch.
-- Per-person outcome on stderr, then a summary (`fetched`, `fresh`, `failed`, `invalid`). Exit 1 if any fetch failed.
+- A work whose detail call fails (429 after retries, 5xx, network) keeps its summary, which has no contributors. The count is recorded in `_cache_metadata` (`missing_work_details`), the record counts as stale, and the next fetch or prefetch tries again (`partial`).
+- Per-person outcome on stderr, then a summary (`fetched`, `partial` = some work details missing, `fresh`, `failed`, `invalid`). Exit 1 if any fetch failed; an en.db without `faculty_identifiers` exits 1 with a message.
 - Rough cost: ~6 works/s, so ~290 COE ORCIDs take about an hour.
 
 ## CLI Interface
@@ -166,8 +172,8 @@ python run_latex.py [--uin <uin> --mapping-db <path> | --orcid <orcid>] --output
 
 | Option | Required | Default | Description |
 |--------|----------|---------|-------------|
-| `--uin` | Yes* | — | Faculty UIN (*mutually exclusive with `--orcid`) |
-| `--orcid` | Yes* | — | ORCID ID directly, bypasses UIN→ORCID mapping (*mutually exclusive with `--uin`) |
+| `--uin` | Yes* | — | Faculty UIN (*exactly one of `--uin`, `--orcid`; both is an error) |
+| `--orcid` | Yes* | — | ORCID ID directly, bypasses UIN→ORCID mapping |
 | `--output-dir` | Yes | — | Output directory for .tex/.json files |
 | `--data-dir` | No | `.` | Base directory containing ORCID data |
 | `--section` | No | `publications` | Section type: `publications` or `data` |
@@ -185,6 +191,11 @@ python run_latex.py [--uin <uin> --mapping-db <path> | --orcid <orcid>] --output
 - `--semester YYYYSC`: one term (e.g. `202431`).
 - Forms: `2024`, `2020-2025` (range), `2020+` (open-ended), `all`; for `--semester`, `202431`, `202331-202521`, `202331+`, `all`.
 - No flag: all years. A malformed value exits 1 with a message.
+
+**Exit codes** (all three entry points; `academia_orcid.cli`): 0 done, with or
+without data; 1 bad input (malformed id or period, no `--mapping-db`, an en.db
+without `faculty_identifiers`, i.e. older than schema v17); 2 argparse errors, a
+fetch that failed with nothing cached, and `--no-fetch` with nothing cached.
 
 **Filter Behavior:**
 - **`--section publications`** (owner, 2026-11-12): a publication dated by a month is kept when that month's term is in the period (`Period.overlaps_date`: January–May spring, June–July summer, August–December fall); one with only a year when that calendar year overlaps it (so `--year 2024` keeps any 2024 work, and a 2023 work only if dated August–December). A publication with no or an unparseable year is left out of every period report and shown only in all-years reports (no flag, or `all`).
@@ -246,8 +257,11 @@ only the rows with Scheme `orcid`, at most one per person:
 | `Scheme` | `orcid` (other schemes are ignored) |
 | `Identifier` | ORCID ID (e.g., `0000-0002-2983-9884`) |
 
-The table name and scheme are `IDENTIFIERS_TABLE` / `ORCID_SCHEME` in `fetch.py`
-(this repo does not import coe-data-core). It replaced `orcid_mapping` (2026-11-09).
+The lookup takes the person's lowest-`Rank` `orcid` row, whitespace stripped (the
+schema allows several ranks; today every person has one). The table name and
+scheme are `IDENTIFIERS_TABLE` / `ORCID_SCHEME` in `fetch.py` (this repo does not
+import coe-data-core). It replaced `orcid_mapping` (2026-11-09). The cache is flat,
+`ORCID_JSON/{orcid}.json` (academia-openalex reads it too).
 The mapping database path is passed via `--mapping-db`. Alternatively, use `--orcid` to bypass the mapping entirely.
 
 ## Dependencies
@@ -257,7 +271,9 @@ requests        # ORCID API calls
 pyyaml          # Optional: YAML config file support (falls back to defaults if absent)
 ```
 
-Install the package in development mode: `pip install -e .`
+Install with `uv sync` (the dev group adds pytest, ruff and mypy). Checks:
+`just test`, `just lint` (ruff check + `ruff format --check`), `just typecheck`
+(mypy; settings in pyproject.toml), `just check` (all three).
 
 ### Configuration
 
@@ -281,9 +297,6 @@ python tools/compose_cv.py --orcid 0000-0002-2983-9884
 python tools/compose_cv.py --orcid 0000-0002-2983-9884 --cal_year 2020-2025
 python tools/compose_cv.py --orcid 0000-0002-2983-9884 --skip-compile
 
-# DOCX
-python tools/compose_cv.py --orcid 0000-0002-2983-9884 --format docx
-
 # BibTeX
 python tools/compose_cv.py --orcid 0000-0002-2983-9884 --format bibtex
 
@@ -295,24 +308,27 @@ python tools/compose_cv.py --orcid 0000-0002-2983-9884 --format bibtex --enrich
 
 Output goes to `out_cv/{orcid-id}/` by default:
 - LaTeX: `{orcid-id}-cv.pdf`, `{orcid-id}-source.zip`, and `.tex` source files
-- DOCX: `{orcid-id}-cv.docx`
 - BibTeX: `{orcid-id}.bib`
 
-### File Provenance
+Each run first removes the previous run's fragments, PDF, archive (or `.bib`) and
+`main.*` byproducts, and nothing else, so a rerun for an empty period never shows
+an older list, and `--output-dir` may point at a folder holding other files (audit
+ORC-08). The archive holds only this run's sources. Exit codes: 0 done; 1 bad input
+or failed compilation; 2 no record (fetch failed with nothing cached, or
+`--no-fetch` with nothing cached).
 
-The standalone CV tools are **derived from** the parent composer's code in `tamu-coe-faculty-profiles/`:
+Word output was retired on 2026-11-12 (owner): the faculty-profiles Word report
+renders through EN_Templates, and its ORCID renderers, which `tools/docx_formatter.py`
+was copied from, no longer exist.
 
-| Local file | Derived from (parent) |
-|------------|----------------------|
-| `tools/compose_cv.py` | `compose_latex.py` (compilation, archiving), `compose_docx.py` (DOCX profile building) |
-| `tools/docx_formatter.py` | `formatters/docx_formatter.py` (ORCID renderers only: `_render_orcid_data`, `_render_publications`, helpers) |
-| `tools/templates/preamble.tex` | `templates/preamble.tex` (stripped of tikz/pgfplots, which are only needed for SET charts) |
-| `tools/templates/header.tex.template` | `templates/header.tex.template` (verbatim) |
-| `tools/templates/main.tex.template` | `templates/main.tex.template` (simplified: ORCID sections only, no awards/service/funding/SET/appendix) |
+### Provenance
 
-### Upstream Sync Policy
-
-When the parent composer's CV generation methods are updated (e.g., formatting changes in `formatters/docx_formatter.py`, template updates in `templates/`, or compilation logic changes in `compose_latex.py`), the corresponding local tools should be updated to parallel those changes **upon request** — not automatically. Claude should diff the parent's files against the local adaptations and propagate relevant changes when asked.
+`tools/compose_cv.py` and `tools/templates/` were adapted from the parent
+composer's `compose_latex.py` (compilation, archiving) and `templates/`
+(`preamble.tex` without tikz/pgfplots; `header.tex.template` with the `%%key%%`
+placeholders compose_cv fills; `main.tex.template` with the ORCID sections only).
+They are maintained here and no longer synced: the parent has moved on, and this
+tool keeps only what an ORCID-only CV needs.
 
 ### Relationship to Section-Provider Role
 
@@ -320,7 +336,6 @@ The standalone CV tools (`tools/`) are **independent** of the section-provider i
 
 ### Dependencies
 
-- `python-docx` is required for `--format docx` but is **not** a package dependency. If unavailable, `--format latex` still works. Install with: `pip install python-docx`
 - `pdflatex` (TeX Live or MacTeX) is required for PDF compilation. Use `--skip-compile` to generate LaTeX source without compiling.
 
 ## Notes
@@ -328,7 +343,8 @@ The standalone CV tools (`tools/`) are **independent** of the section-provider i
 - ORCID API has rate limits — scripts implement delays and retries
 - Unicode handling via `html.unescape()` for international characters
 - LaTeX special characters escaped automatically
-- **Escaping is shared** with tamu-scholars: `latex_text.py` is a verbatim copy of coe-data-core's `coe_core.latex` (written by its `just vendor-set`, drift-tested there; never edit it here). `escape_latex()` (structured fields) and `escape_latex_smart()` (titles, biography: HTML tags with their nesting kept, `$...$` math kept only if base LaTeX can set it) keep every character pdflatex sets with the report preamble — Latin-1, Latin Extended-A, dashes, curly quotes, ellipsis — map Greek, sub/superscripts and common math symbols to LaTeX, and drop the rest (CJK, Arabic, Cyrillic). Probed 2026-11-12 over both caches: every title, name and venue compiles. JSON and DOCX keep all Unicode.
+- **Escaping is shared** with tamu-scholars: `latex_text.py` is a verbatim copy of coe-data-core's `coe_core.latex` (written by its `just vendor-set`, drift-tested there; never edit it here). `escape_latex()` (structured fields) and `escape_latex_smart()` (titles, biography: HTML tags with their nesting kept, `$...$` math kept only if base LaTeX can set it) keep every character pdflatex sets with the report preamble — Latin-1, Latin Extended-A, dashes, curly quotes, ellipsis — map Greek, sub/superscripts and common math symbols to LaTeX, and drop the rest (CJK, Arabic, Cyrillic). Probed 2026-11-12 over both caches: every title, name and venue compiles. JSON and BibTeX keep all Unicode.
 - **No data, no file** (the faculty-profiles section contract): no ORCID on file, or a record with nothing for the section, exits 0 and writes nothing. A failed refetch uses the cached record, with a warning; with no cached record the section fails (exit 2). Under `--no-fetch` a mapped ORCID with no cache file also fails (exit 2, "run `just prefetch`"): a gap in the cache is not "no data".
 - DOI links preserved and formatted as hyperlinks
+- **BibTeX** (`run_bibtex.py`, `compose_cv.py --format bibtex`): an embedded ORCID citation typed `bibtex` is used only if it is a BibTeX entry (`@type{key,`, spaces allowed); HTML pages and formatted references typed `bibtex` get a generated entry instead. Every key is unique in the file, case-insensitively: a repeated or missing key becomes `Family` + year + the first free suffix (`a`, …, `z`, `aa`, …). Checked 2026-11-12 over the cache: one entry per publication, no repeated key (audit ORC-07).
 - Period filtering via the shared flags `--year` (fiscal), `--acad_year`, `--cal_year`, `--semester` (see Options)

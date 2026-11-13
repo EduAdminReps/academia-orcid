@@ -216,118 +216,105 @@ class TestLatexPipeline:
 
 
 # ---------------------------------------------------------------------------
-# Tests: DOCX pipeline
+# Tests: whole runs (main), reruns into the same directory (audit ORC-08, ORC-15)
 # ---------------------------------------------------------------------------
 
-class TestDocxPipeline:
-    """Test DOCX CV generation."""
+ORCID = "0000-0001-2345-6789"
 
-    def test_generates_docx(self, record_with_name, tmp_path):
-        """Verify that the DOCX pipeline creates a valid document."""
-        pytest.importorskip("docx")
 
-        from docx_formatter import OrcidDocxFormatter
-        from academia_orcid.extract import (
-            extract_biography,
-            extract_distinctions,
-            extract_educations,
-            extract_employments,
-            extract_external_identifiers,
-            extract_fundings,
-            extract_memberships,
-            extract_publications,
-            extract_services,
-        )
-        from academia_orcid.json_export import export_data, export_publications
-        from datetime import datetime, timezone
+@pytest.fixture
+def cached(tmp_path, sample_record):
+    """A data dir with sample_record cached (publications dated 2022-2024)."""
+    import json
 
-        output_dir = tmp_path / "docx_output"
-        orcid_id = "0000-0001-2345-6789"
+    (tmp_path / "ORCID_JSON").mkdir()
+    (tmp_path / "ORCID_JSON" / f"{ORCID}.json").write_text(json.dumps(sample_record))
+    return tmp_path
 
-        person = extract_person_info(record_with_name)
 
-        # Extract data
-        biography = extract_biography(record_with_name)
-        ext_ids = extract_external_identifiers(record_with_name)
-        fundings = extract_fundings(record_with_name)
-        employments = extract_employments(record_with_name)
-        educations = extract_educations(record_with_name)
-        distinctions = extract_distinctions(record_with_name)
-        memberships = extract_memberships(record_with_name)
-        services = extract_services(record_with_name)
+def _run(data_dir, out_dir, *extra):
+    from compose_cv import main
 
-        journal, conf, other = extract_publications(record_with_name)
+    main(["--orcid", ORCID, "--data-dir", str(data_dir), "--output-dir", str(out_dir),
+          "--no-fetch", "--skip-compile", *extra])
 
-        data_json = export_data(
-            orcid_id, biography, ext_ids, fundings,
-            employments, educations, distinctions, memberships, services
-        )
-        pubs_json = export_publications(orcid_id, journal, conf, other)
 
-        profile = {
-            "_meta": {
-                "uin": orcid_id,
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-                "year_filter": None,
-            },
-            "identity": {
-                "name": person["name"],
-                "department_name": person["department"],
-                "identifier_label": "ORCID",
-                "identifier_value": orcid_id,
-                "institution": person["institution"],
-                "college": "",
-            },
-        }
-        if data_json:
-            profile["orcid_data"] = data_json
-        if pubs_json:
-            profile["orcid_publications"] = pubs_json
+class TestComposeRuns:
+    def test_rerun_for_an_empty_period_drops_the_old_publications(self, cached, tmp_path):
+        out = tmp_path / "out"
+        _run(cached, out)
+        assert (out / "orcid-publications.tex").exists()
+        assert (out / "orcid-publications-summary.tex").exists()
 
-        formatter = OrcidDocxFormatter()
-        paths = formatter.format(profile, output_dir)
+        _run(cached, out, "--cal_year", "2099")
+        assert not (out / "orcid-publications.tex").exists()
+        assert not (out / "orcid-publications-summary.tex").exists()
+        assert "CY 2099" in (out / "main.tex").read_text()
 
-        assert len(paths) == 1
-        assert paths[0].exists()
-        assert paths[0].suffix == ".docx"
-        assert orcid_id in paths[0].name
+    def test_other_files_in_the_output_dir_are_kept(self, cached, tmp_path):
+        out = tmp_path / "shared"
+        out.mkdir()
+        for name in ("thesis.pdf", "photos.zip", "notes.log"):
+            (out / name).write_text("keep me")
+        _run(cached, out)
+        _run(cached, out)
+        for name in ("thesis.pdf", "photos.zip", "notes.log"):
+            assert (out / name).read_text() == "keep me"
 
-        # Verify it's a valid DOCX by opening it
-        from docx import Document
-        doc = Document(str(paths[0]))
-        # Should have content (at least the header paragraphs)
-        assert len(doc.paragraphs) > 0
+    def test_archive_holds_only_this_runs_sources(self, cached, tmp_path):
+        import zipfile
 
-    def test_empty_profile(self, tmp_path):
-        """DOCX generation with no ORCID data sections."""
-        pytest.importorskip("docx")
+        out = tmp_path / "out"
+        out.mkdir()
+        (out / "unrelated.txt").write_text("x")
+        _run(cached, out)
+        names = set(zipfile.ZipFile(out / f"{ORCID}-source.zip").namelist())
+        assert "unrelated.txt" not in names
+        assert {"main.tex", "header.tex", "preamble.tex", "orcid-publications.tex"} <= names
 
-        from docx_formatter import OrcidDocxFormatter
-        from datetime import datetime, timezone
+    def test_template_writes_the_headings(self, cached, tmp_path):
+        out = tmp_path / "out"
+        _run(cached, out)
+        main_tex = (out / "main.tex").read_text()
+        assert r"\section{ORCID Data}" in main_tex
+        assert r"\section{ORCID Publications}" in main_tex
+        assert r"\input{orcid-publications-summary}" in main_tex
+        for name in ("orcid-data.tex", "orcid-publications.tex", "orcid-publications-summary.tex"):
+            assert r"\section{" not in (out / name).read_text()
 
-        output_dir = tmp_path / "docx_empty"
-        orcid_id = "0000-0001-0000-0000"
+    def test_not_cached_under_no_fetch_exits_2(self, tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            _run(tmp_path, tmp_path / "out")
+        assert exc.value.code == 2
 
-        profile = {
-            "_meta": {
-                "uin": orcid_id,
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-                "year_filter": None,
-            },
-            "identity": {
-                "name": "Test Faculty",
-                "department_name": "",
-                "identifier_label": "ORCID",
-                "identifier_value": orcid_id,
-                "institution": "",
-                "college": "",
-            },
-        }
+    def test_fetch_error_exits_2(self, tmp_path, monkeypatch):
+        import compose_cv
+        from academia_orcid.fetch import OrcidFetchError
 
-        formatter = OrcidDocxFormatter()
-        paths = formatter.format(profile, output_dir)
-        assert len(paths) == 1
-        assert paths[0].exists()
+        def fail(*_args, **_kwargs):
+            raise OrcidFetchError("HTTP 503")
+
+        monkeypatch.setattr(compose_cv, "get_or_fetch_orcid_record", fail)
+        with pytest.raises(SystemExit) as exc:
+            compose_cv.main(["--orcid", ORCID, "--data-dir", str(tmp_path),
+                             "--output-dir", str(tmp_path / "out"), "--skip-compile"])
+        assert exc.value.code == 2
+
+    def test_docx_is_retired(self, cached, tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            _run(cached, tmp_path / "out", "--format", "docx")
+        assert exc.value.code == 2  # argparse: invalid choice
+
+    def test_logs_reach_the_configured_handler(self, cached, tmp_path, capsys):
+        _run(cached, tmp_path / "out")
+        assert "Created: orcid-publications.tex" in capsys.readouterr().err
+
+    def test_bibtex_rerun_for_an_empty_period_drops_the_old_file(self, cached, tmp_path):
+        out = tmp_path / "out"
+        _run(cached, out, "--format", "bibtex")
+        assert (out / f"{ORCID}.bib").exists()
+        _run(cached, out, "--format", "bibtex", "--cal_year", "2099")
+        assert not (out / f"{ORCID}.bib").exists()
 
 
 # ---------------------------------------------------------------------------

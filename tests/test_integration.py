@@ -378,7 +378,8 @@ def test_integration_latex_syntax_valid(monkeypatch, integration_setup):
     # Basic LaTeX syntax checks
     assert content.count("{") == content.count("}")  # Balanced braces
     assert "\\" in content  # Has LaTeX commands
-    assert "\\section" in content or "\\subsection" in content  # Has sections
+    assert "\\subsection" in content  # Has subsections
+    assert "\\section{" not in content  # the composer template writes the heading (ORC-03)
 
 
 def test_integration_latex_escapes_special_characters(monkeypatch, tmp_path):
@@ -422,9 +423,8 @@ def test_integration_latex_escapes_special_characters(monkeypatch, tmp_path):
 
     content = (output_dir / "orcid-publications.tex").read_text()
 
-    # Special characters should be escaped (or handled safely)
-    # At minimum, the file should be created without errors
-    assert len(content) > 0
+    assert r"Paper with \& special \$ characters" in content
+    assert "&" not in content.replace(r"\&", "")
 
 
 # ── Multiple Runs ─────────────────────────────────────────────────────────
@@ -448,22 +448,14 @@ def test_integration_multiple_runs_overwrite(monkeypatch, integration_setup):
 
     output_file = setup["output_dir"] / "orcid-publications.tex"
     first_content = output_file.read_text()
-    first_mtime = output_file.stat().st_mtime
 
-    # Second run (small delay to ensure different mtime)
-    import time
-    time.sleep(0.01)
+    # Second run over a file with other content: it must be rewritten (ORC-13)
+    output_file.write_text("% left by an earlier run")
 
     monkeypatch.setattr(sys, "argv", args)
     cli.main()
 
-    second_content = output_file.read_text()
-    second_mtime = output_file.stat().st_mtime
-
-    # Content should be the same (same data)
-    assert first_content == second_content
-    # File should have been rewritten (newer mtime)
-    assert second_mtime >= first_mtime
+    assert output_file.read_text() == first_content
 
 
 # ── Output Directory Creation ─────────────────────────────────────────────

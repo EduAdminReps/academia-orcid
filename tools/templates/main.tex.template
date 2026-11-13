@@ -15,14 +15,20 @@
 % Faculty header and title page
 \input{header}
 
+% Section headings live here, not in the fragments (as in the faculty-profiles
+% template; audit ORC-03).
+
 % === ORCID Data (Biography, Employment, Education, Selected Projects, etc.) ===
 \IfFileExists{orcid-data.tex}{%
+    \section{ORCID Data}
     \input{orcid-data}%
 }{}
 
 % === ORCID Publications ===
 \IfFileExists{orcid-publications.tex}{%
     \clearpage
+    \section{ORCID Publications}
+    \IfFileExists{orcid-publications-summary.tex}{\input{orcid-publications-summary}}{}
     \input{orcid-publications}%
 }{}
 

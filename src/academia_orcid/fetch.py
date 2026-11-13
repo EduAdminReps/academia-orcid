@@ -2,13 +2,22 @@
 
 import json
 import logging
+import os
 import re
 import sqlite3
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
+
+from .config import get_config
+
+try:
+    import requests
+
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
 
 
 class OrcidFetchError(Exception):
@@ -17,15 +26,7 @@ class OrcidFetchError(Exception):
     This distinguishes transient API failures from legitimate "no data" cases
     (e.g., no ORCID ID on file, --no-fetch with empty cache).
     """
-    pass
 
-try:
-    import requests
-    REQUESTS_AVAILABLE = True
-except ImportError:
-    REQUESTS_AVAILABLE = False
-
-from .config import get_config
 
 # Module logger
 logger = logging.getLogger("academia_orcid.fetch")
@@ -36,6 +37,11 @@ _ORCID_ID_PATTERN = re.compile(r'^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$')
 # Default cache TTL (Time To Live) in seconds: 7 days
 # NOTE: This is now configurable via Config, but kept for backward compatibility
 DEFAULT_CACHE_TTL = 7 * 24 * 60 * 60
+
+# _cache_metadata key: how many works kept only their summary because the
+# /work/{put-code} call failed (429 after retries, 5xx, network). A record with
+# any is stale, so the next fetch tries again (audit ORC-09).
+MISSING_DETAILS_KEY = "missing_work_details"
 
 
 def validate_orcid_id(orcid_id: str) -> bool:
@@ -57,30 +63,20 @@ def validate_orcid_id(orcid_id: str) -> bool:
     return _ORCID_ID_PATTERN.match(orcid_id) is not None
 
 
-def sanitize_dept(dept: str | None) -> str | None:
-    """Sanitize department parameter to prevent path traversal.
-
-    Only allows alphanumeric characters, underscores, and hyphens.
-    Rejects any path components like '..' or '/'.
-
-    Args:
-        dept: Department code to sanitize
-
-    Returns:
-        Sanitized department code, or None if invalid/None
-    """
-    if not dept:
-        return None
-
-    # Only allow alphanumeric, underscore, and hyphen
-    if not re.match(r'^[a-zA-Z0-9_-]+$', dept):
-        return None
-
-    return dept
+def missing_work_details(record: dict) -> int:
+    """How many works of a cached record lack their details (0 for a complete record)."""
+    metadata = record.get("_cache_metadata") or {}
+    try:
+        return int(metadata.get(MISSING_DETAILS_KEY) or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def is_cache_fresh(record: dict, ttl_seconds: int = DEFAULT_CACHE_TTL) -> bool:
     """Check if a cached ORCID record is still fresh.
+
+    A record is stale when it has no metadata, is older than the TTL, or was
+    cached with some work details missing (``missing_work_details``).
 
     Args:
         record: ORCID record dict with optional _cache_metadata
@@ -92,6 +88,8 @@ def is_cache_fresh(record: dict, ttl_seconds: int = DEFAULT_CACHE_TTL) -> bool:
     metadata = record.get("_cache_metadata")
     if not metadata:
         # No metadata means old cache format - consider stale
+        return False
+    if missing_work_details(record):
         return False
 
     cached_at_str = metadata.get("cached_at")
@@ -108,11 +106,12 @@ def is_cache_fresh(record: dict, ttl_seconds: int = DEFAULT_CACHE_TTL) -> bool:
         return False
 
 
-def add_cache_metadata(record: dict) -> dict:
+def add_cache_metadata(record: dict, missing_details: int = 0) -> dict:
     """Add cache metadata to an ORCID record.
 
     Args:
         record: ORCID record dict
+        missing_details: works whose detail fetch failed (recorded only when > 0)
 
     Returns:
         Record with _cache_metadata added
@@ -121,11 +120,13 @@ def add_cache_metadata(record: dict) -> dict:
         "cached_at": datetime.now(timezone.utc).isoformat(),
         "ttl_seconds": DEFAULT_CACHE_TTL,
     }
+    if missing_details:
+        record["_cache_metadata"][MISSING_DETAILS_KEY] = missing_details
     return record
 
 
 # en.db's identifiers table (built by coe-data-core): one row per identifier, so a
-# person's ORCID iD is their row with Scheme 'orcid' (at most one).
+# person's ORCID iD is their row with Scheme 'orcid' (Rank 1 is the primary one).
 IDENTIFIERS_TABLE = "faculty_identifiers"
 ORCID_SCHEME = "orcid"
 
@@ -133,75 +134,69 @@ ORCID_SCHEME = "orcid"
 def get_orcid_for_uin(db_path: Path, uin: str) -> str | None:
     """Look up ORCID ID for a UIN from SQLite (en.db).
 
-    Returns ORCID ID string, or None if not found.
+    Takes the person's lowest-Rank ``orcid`` row (the schema allows several),
+    whitespace stripped. Returns None if the UIN has none.
+
+    Raises:
+        sqlite3.OperationalError: the database has no ``faculty_identifiers``
+            table (en.db older than schema v17) or cannot be read.
     """
     # Read-only: a wrong path fails instead of creating an empty database.
     conn = sqlite3.connect(f"{Path(db_path).resolve().as_uri()}?mode=ro", uri=True)
     try:
-        cur = conn.execute(
-            f"SELECT Identifier FROM {IDENTIFIERS_TABLE} WHERE UIN = ? AND Scheme = ?",
+        row = conn.execute(
+            f"SELECT TRIM(Identifier) FROM {IDENTIFIERS_TABLE} "
+            "WHERE UIN = ? AND Scheme = ? AND TRIM(Identifier) != '' "
+            "ORDER BY Rank LIMIT 1",
             (uin, ORCID_SCHEME),
-        )
-        row = cur.fetchone()
-        if row and row[0]:
-            return row[0]
-        return None
+        ).fetchone()
+        return row[0] if row else None
     finally:
         conn.close()
 
 
-def load_orcid_record(data_dir: Path, orcid_id: str, dept: str = None) -> dict | None:
-    """Load ORCID JSON record from cache."""
+def _cache_file(data_dir: Path, orcid_id: str) -> Path:
+    return data_dir / get_config().cache_dir_name / f"{orcid_id}.json"
+
+
+def load_orcid_record(data_dir: Path, orcid_id: str) -> dict | None:
+    """Load an ORCID record from the cache (``ORCID_JSON/{orcid}.json``).
+
+    Returns None if the file is missing or unreadable (an unreadable file is
+    treated as missing, so it is fetched again).
+    """
     # SECURITY: Validate ORCID ID format to prevent path traversal
     if not validate_orcid_id(orcid_id):
         logger.error(f"Invalid ORCID ID format: {orcid_id}")
         return None
 
-    # SECURITY: Sanitize department parameter
-    dept = sanitize_dept(dept)
-
-    config = get_config()
-    json_dir = data_dir / config.cache_dir_name
-
-    # Try hierarchical structure first (ORCID_JSON/DEPT/orcid.json)
-    if dept:
-        json_file = json_dir / dept / f"{orcid_id}.json"
-        if json_file.exists():
-            try:
-                with open(json_file, encoding="utf-8") as f:
-                    return json.load(f)
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON from {json_file}: {e}")
-                return None
-
-    # Try flat structure (ORCID_JSON/orcid.json)
-    json_file = json_dir / f"{orcid_id}.json"
-    if json_file.exists():
-        try:
-            with open(json_file, encoding="utf-8") as f:
-                return json.load(f)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON from {json_file}: {e}")
-            return None
-
-    # Search all subdirectories (guard against missing cache dir)
-    if not json_dir.is_dir():
+    json_file = _cache_file(data_dir, orcid_id)
+    if not json_file.exists():
         return None
-    for subdir in json_dir.iterdir():
-        if subdir.is_dir():
-            json_file = subdir / f"{orcid_id}.json"
-            if json_file.exists():
-                try:
-                    with open(json_file, encoding="utf-8") as f:
-                        return json.load(f)
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse JSON from {json_file}: {e}")
-                    return None
-
-    return None
+    try:
+        with open(json_file, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        logger.error(f"Failed to parse JSON from {json_file}: {e}")
+        return None
 
 
-def fetch_work_details(orcid_id: str, put_code: str, max_retries: int = None) -> dict | None:
+def _write_cache(data_dir: Path, orcid_id: str, record: dict) -> None:
+    """Write a cache file whole: to a temporary file, then renamed over the old one,
+    so an interrupted write never leaves a truncated file (audit ORC-09)."""
+    cache_file = _cache_file(data_dir, orcid_id)
+    tmp_file = cache_file.with_name(cache_file.name + ".tmp")
+    try:
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(record, f, indent=2)
+        os.replace(tmp_file, cache_file)
+        logger.info(f"Cached ORCID record to {cache_file}")
+    except OSError as e:
+        logger.warning(f"Failed to write cache file for {orcid_id}: {e}")
+
+
+def fetch_work_details(orcid_id: str, put_code: str, max_retries: int | None = None) -> dict | None:
     """Fetch detailed work information from ORCID API."""
     if not REQUESTS_AVAILABLE:
         return None
@@ -247,7 +242,7 @@ def fetch_work_details(orcid_id: str, put_code: str, max_retries: int = None) ->
 def fetch_work_details_concurrent(
     orcid_id: str,
     put_codes: list[str],
-    max_workers: int = None,
+    max_workers: int | None = None,
     rate_limit_delay: float = 0.3
 ) -> dict[str, dict]:
     """Fetch multiple work details concurrently.
@@ -303,13 +298,17 @@ def fetch_work_details_concurrent(
     return results
 
 
-def fetch_orcid_record(orcid_id: str, data_dir: Path, dept: str = None) -> dict | None:
+def fetch_orcid_record(orcid_id: str, data_dir: Path) -> dict | None:
     """Fetch ORCID record from API and cache it locally.
+
+    Each work's summary is replaced by its full detail (contributors, citation).
+    Works whose detail could not be fetched keep their summary, and their count
+    is recorded in ``_cache_metadata`` (``missing_work_details``), which makes the
+    cached record stale (audit ORC-09).
 
     Args:
         orcid_id: ORCID ID to fetch
-        data_dir: Base data directory
-        dept: Optional department for hierarchical storage
+        data_dir: Base data directory (the cache is ``data_dir/ORCID_JSON/``)
 
     Returns:
         ORCID record dict, or None for validation failures (invalid ID, missing requests).
@@ -325,9 +324,6 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path, dept: str = None) -> dict 
     if not validate_orcid_id(orcid_id):
         logger.error(f"Invalid ORCID ID format: {orcid_id}")
         return None
-
-    # SECURITY: Sanitize department parameter
-    dept = sanitize_dept(dept)
 
     config = get_config()
     logger.info(f"Fetching ORCID record for {orcid_id} from API...")
@@ -357,6 +353,7 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path, dept: str = None) -> dict 
     logger.info(f"Successfully fetched main record for {orcid_id}")
 
     # Fetch detailed work information for each work
+    missing = 0
     works = record.get("activities-summary", {}).get("works", {}).get("group", [])
     if works:
         # Collect all put-codes first
@@ -388,34 +385,22 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path, dept: str = None) -> dict 
                     group_idx, summary_idx = work_group_map[put_code]
                     works[group_idx]["work-summary"][summary_idx] = work_details
 
-    # Add cache metadata before saving
-    record = add_cache_metadata(record)
+            missing = len(set(put_codes) - set(work_details_map))
+            if missing:
+                logger.warning(
+                    f"{missing}/{len(put_codes)} work details for {orcid_id} could not be "
+                    "fetched (summary kept); the cached record stays stale"
+                )
 
-    # Save to cache
-    json_dir = data_dir / config.cache_dir_name
-    if dept:
-        cache_dir = json_dir / dept
-    else:
-        cache_dir = json_dir
-
-    try:
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_file = cache_dir / f"{orcid_id}.json"
-
-        with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump(record, f, indent=2)
-
-        logger.info(f"Cached ORCID record to {cache_file}")
-    except OSError as e:
-        logger.warning(f"Failed to write cache file for {orcid_id}: {e}")
-
+    record = add_cache_metadata(record, missing_details=missing)
+    _write_cache(data_dir, orcid_id, record)
     return record
 
 
-def _fetch_or_fall_back(orcid_id: str, data_dir: Path, dept: str | None, cached: dict | None) -> dict:
+def _fetch_or_fall_back(orcid_id: str, data_dir: Path, cached: dict | None) -> dict | None:
     """Fetch the record; if that fails and a cached one exists, use it with a warning."""
     try:
-        return fetch_orcid_record(orcid_id, data_dir, dept)
+        return fetch_orcid_record(orcid_id, data_dir)
     except OrcidFetchError as e:
         if not cached:
             raise
@@ -426,17 +411,15 @@ def _fetch_or_fall_back(orcid_id: str, data_dir: Path, dept: str | None, cached:
 def get_or_fetch_orcid_record(
     data_dir: Path,
     orcid_id: str,
-    dept: str = None,
     fetch: bool = True,
     force: bool = False,
-    cache_ttl: int = None
+    cache_ttl: int | None = None
 ) -> dict | None:
     """Get ORCID record from cache, or fetch from API if not found.
 
     Args:
         data_dir: Base data directory
         orcid_id: ORCID ID to look up
-        dept: Optional department code
         fetch: If True, fetch from API when not in cache
         force: If True, always fetch from API (ignore cache)
         cache_ttl: Cache TTL in seconds (default: from config, typically 7 days)
@@ -457,20 +440,17 @@ def get_or_fetch_orcid_record(
         logger.error(f"Invalid ORCID ID format: {orcid_id}")
         return None
 
-    # SECURITY: Sanitize department parameter
-    dept = sanitize_dept(dept)
-
     # Use config cache_ttl if not specified
     config = get_config()
     if cache_ttl is None:
         cache_ttl = config.cache_ttl
 
-    record = load_orcid_record(data_dir, orcid_id, dept)
+    record = load_orcid_record(data_dir, orcid_id)
 
     # Force fetch: ignore the cache, unless the fetch fails
     if force and fetch:
         logger.info("Force fetching ORCID record (ignoring cache)...")
-        return _fetch_or_fall_back(orcid_id, data_dir, dept, record)
+        return _fetch_or_fall_back(orcid_id, data_dir, record)
 
     if record:
         # Check if cache is still fresh
@@ -478,16 +458,16 @@ def get_or_fetch_orcid_record(
             logger.info(f"Using cached ORCID record for {orcid_id} (fresh)")
             return record
         else:
-            logger.info(f"Cached ORCID record for {orcid_id} is stale (age > {cache_ttl}s), refetching...")
+            logger.info(f"Cached ORCID record for {orcid_id} is stale, refetching...")
             # Cache is stale - fetch new data if allowed
             if fetch:
-                return _fetch_or_fall_back(orcid_id, data_dir, dept, record)
+                return _fetch_or_fall_back(orcid_id, data_dir, record)
             else:
                 logger.warning("Using stale cache (fetch disabled)")
                 return record
 
     # Not in cache - try fetching if enabled
     if fetch:
-        return fetch_orcid_record(orcid_id, data_dir, dept)
+        return fetch_orcid_record(orcid_id, data_dir)
 
     return None

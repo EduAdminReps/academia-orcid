@@ -65,7 +65,39 @@ MONTH_ABBREV = {
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
-def _generate_cite_key(last_name: str, year: str, seen_keys: dict[str, int]) -> str:
+# An embedded citation is used only if it starts like a BibTeX entry: "@type{key,"
+# (spaces allowed: 1,602 cached citations read "@article {key,"). ORCID also
+# stores HTML pages and formatted references typed "bibtex" (202 in the cache);
+# those get a generated entry instead (audit ORC-07).
+_ENTRY_HEAD = re.compile(r"^\s*@\s*(\w+)\s*\{\s*([^,\s]*)\s*,")
+
+
+def _key_suffixes():
+    """a, b, ..., z, aa, ab, ...: the suffixes that tell equal base keys apart."""
+    n = 1
+    while True:
+        suffix, k = "", n
+        while k:
+            k, r = divmod(k - 1, 26)
+            suffix = chr(ord("a") + r) + suffix
+        yield suffix
+        n += 1
+
+
+def _claim_key(key: str, used: set[str]) -> str:
+    """``key``, or ``key`` plus the first free suffix; recorded in ``used``.
+
+    ``used`` holds every key emitted so far, embedded or generated, casefolded
+    (BibTeX and biber report keys differing only in case as repeated entries).
+    """
+    candidate = key
+    if candidate.casefold() in used:
+        candidate = next(key + s for s in _key_suffixes() if (key + s).casefold() not in used)
+    used.add(candidate.casefold())
+    return candidate
+
+
+def _generate_cite_key(last_name: str, year: str, used: set[str]) -> str:
     """Generate a stable, unique cite key.
 
     Format: LastName + Year, with alphabetic suffix for duplicates.
@@ -77,16 +109,7 @@ def _generate_cite_key(last_name: str, year: str, seen_keys: dict[str, int]) -> 
     clean_name = re.sub(r"[^a-zA-Z]", "", clean_name)
     if not clean_name:
         clean_name = "Unknown"
-
-    base_key = f"{clean_name}{year or 'NoYear'}"
-
-    if base_key not in seen_keys:
-        seen_keys[base_key] = 0
-        return base_key
-
-    seen_keys[base_key] += 1
-    suffix = chr(ord("a") + seen_keys[base_key] - 1)
-    return f"{base_key}{suffix}"
+    return _claim_key(f"{clean_name}{year or 'NoYear'}", used)
 
 
 def _get_first_author_last_name(pub: dict) -> str:
@@ -135,9 +158,19 @@ def _format_authors_bibtex(raw_authors: list[str]) -> str:
 
 
 def _extract_cite_key_from_bibtex(bibtex_str: str) -> str | None:
-    """Extract the cite key from an embedded BibTeX string."""
-    match = re.match(r"@\w+\{([^,]+),", bibtex_str.strip())
-    return match.group(1).strip() if match else None
+    """The cite key of an embedded BibTeX entry; None if it has none or is not BibTeX."""
+    match = _ENTRY_HEAD.match(bibtex_str)
+    return (match.group(2) or None) if match else None
+
+
+def _is_bibtex_entry(text: str) -> bool:
+    """Whether an embedded "bibtex" citation is a BibTeX entry at all."""
+    return bool(_ENTRY_HEAD.match(text))
+
+
+def _set_cite_key(bibtex_str: str, key: str) -> str:
+    """The entry with its cite key replaced (or supplied, if it had none)."""
+    return _ENTRY_HEAD.sub(lambda m: f"@{m.group(1)}{{{key},", bibtex_str.strip(), count=1)
 
 
 def _normalize_embedded_bibtex(bibtex_str: str) -> str:
@@ -232,9 +265,12 @@ def export_bibtex(
     """Export publications as BibTeX .bib file content.
 
     Strategy:
-    1. If a publication has an embedded ORCID citation (citation-type: bibtex),
-       use it directly (ORCID is system of record).
+    1. If a publication has an embedded ORCID citation (citation-type: bibtex)
+       that is a BibTeX entry, use it (ORCID is system of record), with its key
+       made unique if another entry already uses it.
     2. Otherwise, generate BibTeX from extracted fields.
+
+    Every key is unique in the file, case-insensitively (audit ORC-07).
 
     Args:
         orcid_id: ORCID identifier (for header comment)
@@ -249,34 +285,27 @@ def export_bibtex(
     if not all_pubs:
         return ""
 
-    seen_keys: dict[str, int] = {}
+    used: set[str] = set()
     entries = []
     stats = {"embedded": 0, "generated": 0}
 
     for pub in all_pubs:
         citation = pub.get("citation")
 
-        # Prefer embedded BibTeX from ORCID
+        # Prefer embedded BibTeX from ORCID, if it is BibTeX
         if (citation and isinstance(citation, dict)
                 and citation.get("citation-type") == "bibtex"):
-            bibtex_str = citation.get("citation-value", "")
-            if bibtex_str.strip():
+            bibtex_str = citation.get("citation-value") or ""
+            if _is_bibtex_entry(bibtex_str):
                 embedded_key = _extract_cite_key_from_bibtex(bibtex_str)
-                if embedded_key:
-                    if embedded_key in seen_keys:
-                        # Duplicate key — generate a unique replacement
-                        last_name = _get_first_author_last_name(pub)
-                        new_key = _generate_cite_key(
-                            last_name, pub.get("year", ""), seen_keys
-                        )
-                        bibtex_str = re.sub(
-                            r"(@\w+\{)[^,]+,",
-                            rf"\g<1>{new_key},",
-                            bibtex_str,
-                            count=1,
-                        )
-                    else:
-                        seen_keys[embedded_key] = 0
+                if embedded_key and embedded_key.casefold() not in used:
+                    used.add(embedded_key.casefold())
+                else:
+                    # Repeated or missing key: a unique generated one instead
+                    new_key = _generate_cite_key(
+                        _get_first_author_last_name(pub), pub.get("year", ""), used
+                    )
+                    bibtex_str = _set_cite_key(bibtex_str, new_key)
 
                 entries.append(_normalize_embedded_bibtex(bibtex_str))
                 stats["embedded"] += 1
@@ -284,7 +313,7 @@ def export_bibtex(
 
         # Fallback: generate from extracted fields
         last_name = _get_first_author_last_name(pub)
-        cite_key = _generate_cite_key(last_name, pub.get("year", ""), seen_keys)
+        cite_key = _generate_cite_key(last_name, pub.get("year", ""), used)
         entry = _pub_to_bibtex_entry(pub, cite_key)
         entries.append(entry)
         stats["generated"] += 1

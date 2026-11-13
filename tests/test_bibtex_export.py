@@ -21,12 +21,12 @@ from academia_orcid.extract import extract_publications
 
 class TestCiteKeyGeneration:
     def test_basic(self):
-        seen = {}
+        seen: set[str] = set()
         key = _generate_cite_key("Smith", "2024", seen)
         assert key == "Smith2024"
 
     def test_duplicate_keys(self):
-        seen = {}
+        seen: set[str] = set()
         k1 = _generate_cite_key("Smith", "2024", seen)
         k2 = _generate_cite_key("Smith", "2024", seen)
         k3 = _generate_cite_key("Smith", "2024", seen)
@@ -35,27 +35,27 @@ class TestCiteKeyGeneration:
         assert k3 == "Smith2024b"
 
     def test_unicode_folding(self):
-        seen = {}
+        seen: set[str] = set()
         key = _generate_cite_key("Müller", "2023", seen)
         assert key == "Muller2023"
 
     def test_missing_year(self):
-        seen = {}
+        seen: set[str] = set()
         key = _generate_cite_key("Jones", "", seen)
         assert key == "JonesNoYear"
 
     def test_empty_name(self):
-        seen = {}
+        seen: set[str] = set()
         key = _generate_cite_key("", "2024", seen)
         assert key == "Unknown2024"
 
     def test_special_characters_stripped(self):
-        seen = {}
+        seen: set[str] = set()
         key = _generate_cite_key("O'Brien-Smith", "2024", seen)
         assert key == "OBrienSmith2024"
 
     def test_different_years_no_suffix(self):
-        seen = {}
+        seen: set[str] = set()
         k1 = _generate_cite_key("Smith", "2023", seen)
         k2 = _generate_cite_key("Smith", "2024", seen)
         assert k1 == "Smith2023"
@@ -643,3 +643,80 @@ class TestExtractIntegration:
         }
         journals, _, _ = extract_publications(record)
         assert journals[0]["citation"] == citation
+
+
+# ── Unique keys and real embedded shapes (audit ORC-07) ─────────────────────
+
+
+def _pub(title, citation=None, year="2024", author="Jane Doe"):
+    pub = {
+        "raw_authors": [author], "authors": "Doe, J.", "title": title, "venue": "",
+        "year": year, "month": "", "doi": "", "url": "", "pub_type": "journal-article",
+        "external_ids": {},
+    }
+    if citation is not None:
+        pub["citation"] = {"citation-type": "bibtex", "citation-value": citation}
+    return pub
+
+
+def _keys(bib: str) -> list[str]:
+    import re
+    return re.findall(r"^\s*@\s*\w+\s*\{\s*([^,\s]*)\s*,", bib, flags=re.M)
+
+
+class TestUniqueKeys:
+    def test_key_with_space_before_brace(self):
+        assert _extract_cite_key_from_bibtex("@article {doe2024,\n title={A}}") == "doe2024"
+        assert _extract_cite_key_from_bibtex("  @ inproceedings{ doe2024 , title={A}}") == "doe2024"
+
+    def test_space_before_brace_duplicates_renamed(self):
+        bib = export_bibtex("0000-0001-2345-6789", [
+            _pub("A", "@article {doe2024,\n title={A}}"),
+            _pub("B", "@article {doe2024,\n title={B}}"),
+        ], [], [])
+        keys = _keys(bib)
+        assert len(keys) == 2 and len(set(keys)) == 2
+        assert keys[0] == "doe2024"
+
+    def test_generated_suffix_never_reused_by_embedded_key(self):
+        bib = export_bibtex("0000-0001-2345-6789", [
+            _pub("A"), _pub("B"),                        # Doe2024, Doe2024a
+            _pub("C", "@article{Doe2024a, title={C}}"),  # embedded key already taken
+        ], [], [])
+        keys = _keys(bib)
+        assert keys[:2] == ["Doe2024", "Doe2024a"]
+        assert len(set(keys)) == 3
+
+    def test_embedded_key_never_reused_by_generated_key(self):
+        bib = export_bibtex("0000-0001-2345-6789", [
+            _pub("A", "@article{Doe2024, title={A}}"), _pub("B"),
+        ], [], [])
+        assert _keys(bib) == ["Doe2024", "Doe2024a"]
+
+    def test_keys_differing_only_in_case_are_repeats(self):
+        bib = export_bibtex("0000-0001-2345-6789", [
+            _pub("A", "@article{doe2024, title={A}}"), _pub("B"),
+        ], [], [])
+        keys = _keys(bib)
+        assert len({k.casefold() for k in keys}) == 2
+
+    def test_many_duplicates_get_distinct_suffixes(self):
+        bib = export_bibtex("0000-0001-2345-6789", [_pub(f"T{i}") for i in range(30)], [], [])
+        keys = _keys(bib)
+        assert len(set(keys)) == 30
+        assert "Doe2024z" in keys and "Doe2024aa" in keys
+
+    def test_entry_without_key_gets_one(self):
+        bib = export_bibtex("0000-0001-2345-6789", [_pub("A", "@article{, title={A}}")], [], [])
+        assert _keys(bib) == ["Doe2024"]
+
+    @pytest.mark.parametrize("value", [
+        "<head><title>Citation</title></head>",
+        "Doe, J. (2024). A paper. Journal, 1, 2-3.",
+        "",
+    ])
+    def test_not_bibtex_falls_back_to_generated_entry(self, value):
+        bib = export_bibtex("0000-0001-2345-6789", [_pub("A paper", value)], [], [])
+        assert "(0 from ORCID, 1 generated)" in bib
+        assert "@article{Doe2024," in bib
+        assert "<head>" not in bib

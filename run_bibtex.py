@@ -1,133 +1,56 @@
 #!/usr/bin/env python3
 """CLI entry point for ORCID BibTeX export.
 
-Parallel to run_latex.py (LaTeX) and run_json.py (JSON), this outputs
-a .bib file. Same CLI contract: --uin, --output-dir, and the period flags
-(--year, --acad_year, --cal_year, --semester; academia_orcid.periods).
+Parallel to run_latex.py (LaTeX) and run_json.py (JSON), this outputs a .bib
+file. Same CLI contract and exit codes (academia_orcid.cli): --uin or --orcid,
+--output-dir, and the period flags (--year, --acad_year, --cal_year, --semester;
+academia_orcid.periods).
 
 Output:
     {output-dir}/orcid-publications.bib
 """
 
 import argparse
-import logging
-import sys
 from pathlib import Path
 
 from academia_orcid import OUTPUT_PUBLICATIONS_BIB
-from academia_orcid.config import get_config
-from academia_orcid.logging_config import setup_logging
+from academia_orcid.bibtex_export import export_bibtex
+from academia_orcid.cli import (
+    add_common_args,
+    load_record,
+    resolve_orcid_id,
+    resolve_period,
+    setup_from_args,
+)
 from academia_orcid.extract import (
     extract_publications,
     filter_publications_by_period,
 )
-from academia_orcid.cli import resolve_period, validate_uin
-from academia_orcid.fetch import OrcidFetchError, get_or_fetch_orcid_record, get_orcid_for_uin, validate_orcid_id
-from academia_orcid.bibtex_export import export_bibtex
-from academia_orcid.periods import add_period_args
 
 
-def main():
+def main(argv: list[str] | None = None):
     """Generate ORCID BibTeX export for a faculty member."""
     parser = argparse.ArgumentParser(
         description="Export ORCID publications as BibTeX (.bib)."
     )
-    parser.add_argument("--uin", default=None, help="Faculty UIN")
-    parser.add_argument("--orcid", default=None, help="ORCID ID directly")
-    parser.add_argument("--output-dir", required=True, help="Output directory")
-    parser.add_argument("--data-dir", default=".", help="Base directory for ORCID cache")
-    add_period_args(parser)
-    fetch_group = parser.add_mutually_exclusive_group()
-    fetch_group.add_argument("--fetch", dest="fetch", action="store_true", default=True,
-                             help="Fetch from ORCID API if not cached (default)")
-    fetch_group.add_argument("--no-fetch", dest="fetch", action="store_false",
-                             help="Only use cached records")
-    fetch_group.add_argument("--force-fetch", action="store_true",
-                             help="Always fetch from API (refresh cache)")
-    parser.add_argument("--mapping-db", default=None, help="Path to SQLite (en.db) with faculty_identifiers")
+    add_common_args(parser)
     parser.add_argument(
         "--enrich", action="store_true",
         help="Enrich publications via DOI content negotiation (fills gaps)",
     )
-    parser.add_argument(
-        "--config",
-        default=None,
-        help="Path to YAML configuration file (optional, defaults to .academia-orcid.yaml)"
-    )
-    parser.add_argument(
-        "--log-level",
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        help="Logging level (default: INFO)"
-    )
-    parser.add_argument(
-        "--log-file",
-        default=None,
-        help="Optional log file path (logs to stderr if not specified)"
-    )
+    args = parser.parse_args(argv)
+    logger = setup_from_args(args, "academia_orcid.run_bibtex")
 
-    args = parser.parse_args()
-
-    # Setup logging
-    log_file = Path(args.log_file) if args.log_file else None
-    setup_logging(level=args.log_level, log_file=log_file)
-    logger = logging.getLogger("academia_orcid.run_bibtex")
-
-    # Load configuration
-    config_file = Path(args.config) if args.config else None
-    get_config(config_file)
-
-    if not args.uin and not args.orcid:
-        parser.error("Either --uin or --orcid is required")
-
-    fetch_enabled = args.fetch
-    force_fetch = args.force_fetch
-    data_path = Path(args.data_dir)
     output_path = Path(args.output_dir)
     period = resolve_period(args)
 
-    # Resolve ORCID ID
-    if args.orcid:
-        orcid_id = args.orcid
-
-        if not validate_orcid_id(orcid_id):
-            logger.error(f"Invalid ORCID ID format: {orcid_id}")
-            logger.error("ORCID IDs must match the pattern: XXXX-XXXX-XXXX-XXXX")
-            sys.exit(1)
-
-        logger.info(f"Using ORCID ID directly: {orcid_id}")
-    else:
-        uin = args.uin
-
-        if not validate_uin(uin):
-            logger.error(f"Invalid UIN format: {uin}")
-            logger.error("UINs must be exactly 9 digits")
-            sys.exit(1)
-
-        if not args.mapping_db:
-            logger.error("--mapping-db is required when using --uin")
-            sys.exit(1)
-
-        db_path = Path(args.mapping_db)
-        if not db_path.exists():
-            logger.error(f"Mapping database not found: {db_path}")
-            sys.exit(1)
-
-        orcid_id = get_orcid_for_uin(db_path, uin)
-        if not orcid_id:
-            logger.warning(f"No ORCID ID found for UIN {uin}; skipping.")
-            return
-
-        logger.info(f"Found ORCID {orcid_id} for UIN {uin}")
-
-    # Load ORCID record
-    try:
-        record = get_or_fetch_orcid_record(data_path, orcid_id, None, fetch=fetch_enabled, force=force_fetch)
-    except OrcidFetchError as e:
-        logger.error(f"ORCID API fetch failed for {orcid_id}: {e}")
-        sys.exit(2)
-    if not record:
-        logger.warning(f"No ORCID record found for {orcid_id}; skipping.")
+    orcid_id = resolve_orcid_id(args, logger)
+    if orcid_id is None:
+        logger.info("No .bib file.")
+        return
+    record = load_record(args, orcid_id, logger)
+    if record is None:
+        logger.info("No .bib file.")
         return
 
     # Extract and export

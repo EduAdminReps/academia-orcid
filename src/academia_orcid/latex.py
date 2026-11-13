@@ -61,15 +61,8 @@ def _generate_publication_list(lines: list[str], subsection_name: str, publicati
     lines.append("")
 
 
-def generate_latex(orcid_id: str, journal_articles: list, conference_papers: list, other_publications: list) -> str:
-    """Generate LaTeX sections from publications with ORCID header and DOI links."""
-    lines = []
-
-    # Main section header
-    lines.append(r"\section{ORCID Publications}")
-    lines.append("")
-
-    # ORCID profile link (sanitize — defense in depth)
+def _orcid_link(lines: list[str], orcid_id: str) -> None:
+    """The "ORCID: <id>" line linking the profile (URL sanitized, defense in depth)."""
     orcid_url = sanitize_url_for_latex(f"https://orcid.org/{orcid_id}")
     orcid_id_escaped = escape_latex(orcid_id)
     lines.append(r"\noindent")
@@ -79,22 +72,46 @@ def generate_latex(orcid_id: str, journal_articles: list, conference_papers: lis
         lines.append(f"ORCID: {orcid_id_escaped}")
     lines.append("")
 
-    # Summary counts
-    lines.append(r"\vspace{0.5em}")
-    lines.append(r"\noindent")
-    if journal_articles:
-        lines.append(f"{len(journal_articles)} Journal Articles for the period considered")
-        lines.append(r"\\")
-    if conference_papers:
-        lines.append(f"{len(conference_papers)} Conference Papers for the period considered")
-        lines.append(r"\\")
-    if other_publications:
-        lines.append(f"{len(other_publications)} Other Publications for the period considered")
-    lines.append("")
 
+def generate_latex_summary(
+    orcid_id: str, journal_articles: list, conference_papers: list, other_publications: list
+) -> str:
+    """The publications summary: ORCID profile link and counts by type.
+
+    Written to orcid-publications-summary.tex, which the composer template inputs
+    under its own "ORCID Publications" heading (audit ORC-03). The report header
+    already names the period, so the counts are plain.
+    """
+    lines: list[str] = []
+    _orcid_link(lines, orcid_id)
+    counts = [
+        f"{label}: {len(pubs)}"
+        for label, pubs in (
+            ("Journal Articles", journal_articles),
+            ("Conference Papers", conference_papers),
+            ("Other Publications", other_publications),
+        )
+        if pubs
+    ]
+    if counts:
+        lines.append(r"\noindent")
+        lines.append("\\\\\n".join(counts))
+        lines.append("")
+    return "\n".join(lines)
+
+
+def generate_latex(orcid_id: str, journal_articles: list, conference_papers: list, other_publications: list) -> str:
+    """The publication lists, one subsection per type, with DOI links.
+
+    No section heading, profile link or counts: the composer template writes the
+    heading (fragments never emit ``\\section``; audit ORC-03) and the summary
+    file (``generate_latex_summary``) carries the link and counts. Empty when
+    there are no publications (no file; section contract rule 5).
+    """
     if not journal_articles and not conference_papers and not other_publications:
         return ""
 
+    lines: list[str] = []
     if journal_articles:
         _generate_publication_list(lines, "Journal Articles", journal_articles)
 
@@ -118,22 +135,13 @@ def generate_data_latex(
     memberships: list[dict],
     services: list[dict],
 ) -> str:
-    """Generate LaTeX section for ORCID Data (non-publication fields)."""
-    lines = []
+    """The ORCID Data body (non-publication fields), one subsection per kind.
 
-    # Main section header
-    lines.append(r"\section{ORCID Data}")
-    lines.append("")
-
-    # ORCID profile link (sanitize — defense in depth)
-    orcid_url = sanitize_url_for_latex(f"https://orcid.org/{orcid_id}")
-    orcid_id_escaped = escape_latex(orcid_id)
-    lines.append(r"\noindent")
-    if orcid_url:
-        lines.append(f"ORCID: \\href{{{orcid_url}}}{{{orcid_id_escaped}}}")
-    else:
-        lines.append(f"ORCID: {orcid_id_escaped}")
-    lines.append("")
+    Starts with the ORCID profile link; no section heading (the composer template
+    writes it; audit ORC-03). Empty when no field has data.
+    """
+    lines: list[str] = []
+    _orcid_link(lines, orcid_id)
 
     from academia_orcid.normalize import escape_latex_smart
 
