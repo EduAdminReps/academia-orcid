@@ -377,3 +377,23 @@ def test_export_data_empty_biography_string():
     # Empty string is falsy, but should be treated as no content for biography check
     # However, employments list is not empty, so export should happen
     assert result["biography"] == ""
+
+
+def test_export_publications_provenance():
+    """_meta.provenance: the keys tamu-scholars and academia-openalex write too."""
+    journals = [{"title": "Paper", "year": "2024"}]
+    result = export_publications(
+        "0000-0001-2345-6789", journals, [], [], fetched_at="2026-11-13T00:00:00+00:00"
+    )
+    assert result["_meta"]["provenance"] == {
+        "source": "orcid",
+        "ids": ["0000-0001-2345-6789"],
+        "curation": "author-curated",
+        "fetched_at": "2026-11-13T00:00:00+00:00",
+    }
+    assert (
+        export_publications("0000-0001-2345-6789", journals, [], [])["_meta"]["provenance"][
+            "fetched_at"
+        ]
+        is None
+    )

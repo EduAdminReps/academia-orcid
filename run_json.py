@@ -84,7 +84,11 @@ def main(argv: list[str] | None = None):
         other_publications = filter_publications_by_period(other_publications, period)
 
         data = export_publications(
-            orcid_id, journal_articles, conference_papers, other_publications
+            orcid_id,
+            journal_articles,
+            conference_papers,
+            other_publications,
+            fetched_at=(record.get("_cache_metadata") or {}).get("cached_at"),
         )
     else:
         data = export_data(

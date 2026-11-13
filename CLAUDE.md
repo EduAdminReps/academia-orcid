@@ -362,6 +362,17 @@ section contract. Their shared code is of two kinds:
   fix again lands in one twin only, revisit: vendor the source-neutral parts from
   coe-data-core like `latex_text.py`.
 
+  **A third copy** (owner, 2026-11-13): `../academia-openalex/` lists the works
+  OpenAlex attributes to an author id with the same contract (`run_json.py` only;
+  its `section_cli.py` is this repo's `cli.py`). Check changes to the shared parts
+  against it too.
+
+**Provenance** (owner, 2026-11-13): the publications JSON carries
+`_meta.provenance` = `{source: "orcid", ids: [orcid], curation: "author-curated",
+fetched_at: <cache time>}`. tamu-scholars and academia-openalex write the same keys
+(OpenAlex: `curation: "aggregated"`), so a consumer tells curated lists from
+aggregated ones the same way.
+
 ## Notes
 
 - ORCID API has rate limits — scripts implement delays and retries

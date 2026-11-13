@@ -187,3 +187,14 @@ def test_data_section_has_no_heading(tmp_path, data_dir):
     content = (out / "orcid-data.tex").read_text()
     assert r"\section{" not in content
     assert r"\subsection{Employment}" in content
+
+
+def test_json_provenance_carries_the_cache_time(tmp_path, sample_record):
+    """run_json stamps the record's fetch time into _meta.provenance."""
+    record = dict(sample_record, _cache_metadata={"cached_at": "2026-11-13T00:00:00+00:00"})
+    (tmp_path / "ORCID_JSON").mkdir()
+    (tmp_path / "ORCID_JSON" / f"{ORCID}.json").write_text(json.dumps(record))
+    run_json.main(_args(tmp_path / "out", tmp_path, "--orcid", ORCID, "--no-fetch"))
+    meta = json.loads((tmp_path / "out" / "orcid-publications.json").read_text())["_meta"]
+    assert meta["provenance"]["fetched_at"] == "2026-11-13T00:00:00+00:00"
+    assert meta["provenance"]["curation"] == "author-curated"

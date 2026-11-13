@@ -5,11 +5,20 @@ and wraps them in a standard JSON envelope with _meta section.
 
 Text fields are cleaned via normalize.clean_for_plaintext() to strip
 HTML markup and convert sub/superscripts to Unicode.
+
+Publications carry ``_meta.provenance``, with the same keys in academia-orcid,
+tamu-scholars and academia-openalex, so a consumer tells author-curated lists
+from aggregated ones the same way: ``source`` (the identifier scheme, as en.db's
+faculty_identifiers names it), ``ids``, ``curation`` (``author-curated`` here;
+``aggregated`` for OpenAlex) and ``fetched_at`` (when the record was fetched).
 """
 
 from datetime import datetime, timezone
 
 from academia_orcid.normalize import clean_for_plaintext
+
+PROVENANCE_SOURCE = "orcid"
+CURATION = "author-curated"  # the faculty member maintains the ORCID record
 
 
 def _clean_pub(pub: dict) -> dict:
@@ -88,6 +97,7 @@ def export_publications(
     journal_articles: list[dict],
     conference_papers: list[dict],
     other_publications: list[dict],
+    fetched_at: str | None = None,
 ) -> dict:
     """Export ORCID publications as a JSON-serializable dict.
 
@@ -96,6 +106,7 @@ def export_publications(
         journal_articles: List of journal article dicts
         conference_papers: List of conference paper dicts
         other_publications: List of other publication dicts
+        fetched_at: when the ORCID record was fetched (its cache time), for provenance
 
     Returns:
         Dict ready for JSON serialization, or empty dict if no publications found.
@@ -112,6 +123,12 @@ def export_publications(
             "orcid_id": orcid_id,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "total_count": total,
+            "provenance": {
+                "source": PROVENANCE_SOURCE,
+                "ids": [orcid_id],
+                "curation": CURATION,
+                "fetched_at": fetched_at,
+            },
         },
         "journal_articles": [_clean_pub(p) for p in journal_articles],
         "conference_papers": [_clean_pub(p) for p in conference_papers],
