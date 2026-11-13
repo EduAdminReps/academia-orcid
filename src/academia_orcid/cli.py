@@ -1,8 +1,6 @@
-"""Command-line interface for generating ORCID LaTeX sections.
-
-Also the plumbing the three entry points share (run_latex.py, run_json.py,
-run_bibtex.py): the common flags, the UIN → ORCID lookup and the record load,
-with one set of exit codes:
+"""The section entry point's plumbing (run_json.py): the common flags, the UIN →
+ORCID lookup and the record load, with one set of exit codes (hand-aligned with
+tamu-scholars' cli.py and academia-openalex's section_cli.py):
 
 - 0: done, with or without data (no data writes no file; section contract rule 5)
 - 1: bad input (malformed --uin/--orcid/period, no --mapping-db, an en.db
@@ -18,34 +16,13 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from academia_orcid import (
-    OUTPUT_DATA_TEX,
-    OUTPUT_PUBLICATIONS_SUMMARY_TEX,
-    OUTPUT_PUBLICATIONS_TEX,
-    SECTION_DATA,
-    SECTION_PUBLICATIONS,
-    VALID_SECTIONS,
-)
 from academia_orcid.config import get_config
-from academia_orcid.extract import (
-    extract_biography,
-    extract_distinctions,
-    extract_educations,
-    extract_employments,
-    extract_external_identifiers,
-    extract_fundings,
-    extract_memberships,
-    extract_publications,
-    extract_services,
-    filter_publications_by_period,
-)
 from academia_orcid.fetch import (
     OrcidFetchError,
     get_or_fetch_orcid_record,
     get_orcid_for_uin,
     validate_orcid_id,
 )
-from academia_orcid.latex import generate_data_latex, generate_latex, generate_latex_summary
 from academia_orcid.logging_config import setup_logging
 from academia_orcid.periods import Period, add_period_args, period_from_args
 
@@ -80,7 +57,7 @@ def resolve_period(args: argparse.Namespace) -> Period:
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
-    """The flags every section entry point takes (run_latex, run_json, run_bibtex)."""
+    """The flags of the section entry point (run_json.py); it adds --section."""
     who = parser.add_mutually_exclusive_group(required=True)
     who.add_argument("--uin", help="Faculty UIN (looked up in --mapping-db)")
     who.add_argument("--orcid", help="ORCID ID directly (bypasses the UIN→ORCID mapping)")
@@ -205,121 +182,3 @@ def load_record(args: argparse.Namespace, orcid_id: str, logger: logging.Logger)
         logger.info(f"No ORCID record for {orcid_id}.")
         return None
     return record
-
-
-def main(argv: list[str] | None = None):
-    """Generate faculty sections from ORCID data."""
-    parser = argparse.ArgumentParser(
-        description="Generate faculty sections from ORCID data for vita report."
-    )
-    add_common_args(parser)
-    parser.add_argument(
-        "--section",
-        default=SECTION_PUBLICATIONS,
-        choices=VALID_SECTIONS,
-        help="Section to generate: publications or data",
-    )
-    args = parser.parse_args(argv)
-    logger = setup_from_args(args, "academia_orcid.cli")
-
-    output_path = Path(args.output_dir)
-    section = args.section
-    period = resolve_period(args)
-
-    # Log period status
-    if not period.is_all and section == SECTION_DATA:
-        logger.info("Note: the period is ignored for --section data (all data included)")
-    elif not period.is_all:
-        logger.info(f"Period: {period.label()}")
-
-    output_filename = (
-        OUTPUT_PUBLICATIONS_TEX if section == SECTION_PUBLICATIONS else OUTPUT_DATA_TEX
-    )
-
-    # An earlier run's summary must not outlive its publications file: the composer
-    # template inputs it whenever it exists.
-    if section == SECTION_PUBLICATIONS:
-        (output_path / OUTPUT_PUBLICATIONS_SUMMARY_TEX).unlink(missing_ok=True)
-
-    orcid_id = resolve_orcid_id(args, logger)
-    if orcid_id is None:
-        # No data for this section: no file (section contract rule 5; audit ORC-04).
-        logger.info(f"No {section} section.")
-        return
-    record = load_record(args, orcid_id, logger)
-    if record is None:
-        logger.info(f"No {section} section.")
-        return
-
-    if section == SECTION_PUBLICATIONS:
-        # Extract publications
-        journal_articles, conference_papers, other_publications = extract_publications(record)
-        total_before = len(journal_articles) + len(conference_papers) + len(other_publications)
-
-        # Keep publications overlapping the period
-        if not period.is_all:
-            journal_articles = filter_publications_by_period(journal_articles, period)
-            conference_papers = filter_publications_by_period(conference_papers, period)
-            other_publications = filter_publications_by_period(other_publications, period)
-            total_after = len(journal_articles) + len(conference_papers) + len(other_publications)
-            logger.info(f"Found {total_before} publications, {total_after} in {period.label()}")
-        else:
-            logger.info(
-                f"Found {len(journal_articles)} journal articles, {len(conference_papers)} conference papers, {len(other_publications)} other"
-            )
-
-        # Generate LaTeX
-        latex = generate_latex(orcid_id, journal_articles, conference_papers, other_publications)
-    else:
-        # Extract ORCID data fields
-        biography = extract_biography(record)
-        external_identifiers = extract_external_identifiers(record)
-        fundings = extract_fundings(record)
-        employments = extract_employments(record)
-        educations = extract_educations(record)
-        distinctions = extract_distinctions(record)
-        memberships = extract_memberships(record)
-        services = extract_services(record)
-
-        logger.info(
-            f"Found: {len(external_identifiers)} external IDs, {len(fundings)} fundings, "
-            f"{len(employments)} employments, {len(educations)} educations, "
-            f"{len(distinctions)} distinctions, {len(memberships)} memberships, "
-            f"{len(services)} services"
-        )
-
-        # Generate LaTeX
-        latex = generate_data_latex(
-            orcid_id,
-            biography,
-            external_identifiers,
-            fundings,
-            employments,
-            educations,
-            distinctions,
-            memberships,
-            services,
-        )
-
-    # Don't write file if no data (composer uses file existence to decide inclusion)
-    if not latex:
-        logger.info(f"No {section} data found; skipping file creation.")
-        return
-
-    # Write output
-    output_path.mkdir(parents=True, exist_ok=True)
-    section_file = output_path / output_filename
-    section_file.write_text(latex)
-    logger.info(f"Generated: {section_file}")
-
-    # The summary (profile link, counts) goes under the template's own heading.
-    if section == SECTION_PUBLICATIONS:
-        summary_file = output_path / OUTPUT_PUBLICATIONS_SUMMARY_TEX
-        summary_file.write_text(
-            generate_latex_summary(
-                orcid_id, journal_articles, conference_papers, other_publications
-            )
-        )
-        logger.info(f"Generated: {summary_file}")
-
-    print(str(section_file))

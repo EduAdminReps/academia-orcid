@@ -44,10 +44,7 @@ cache:
 
 # Output Configuration
 output:
-  # Maximum number of authors to display before "et al."
-  author_limit: 5
-
-  # JSON indentation level (for run_json.py output)
+  # JSON indentation level (run_json.py output)
   json_indent: 2
 
 # Environment variable overrides (highest priority):

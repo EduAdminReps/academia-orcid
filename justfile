@@ -17,7 +17,7 @@ default:
 prefetch *args:
     {{ python }} run_prefetch.py --mapping-db {{ db }} {{ args }}
 
-# Run the test suite (extra arguments go to pytest, e.g. `just test -k bibtex`).
+# Run the test suite (extra arguments go to pytest, e.g. `just test -k extract`).
 test *args:
     uv run pytest {{ args }}
 
@@ -26,7 +26,7 @@ lint:
     uv run ruff check .
     uv run ruff format --check .
 
-# Type-check the package, tools and entry points (settings in pyproject.toml).
+# Type-check the package and entry points (settings in pyproject.toml).
 typecheck:
     uv run mypy
 

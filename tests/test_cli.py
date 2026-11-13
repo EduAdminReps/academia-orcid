@@ -2,10 +2,13 @@
 
 import sqlite3
 import sys
+from pathlib import Path
 
 import pytest
 
-from academia_orcid import cli
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import run_json  # noqa: E402
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -49,20 +52,20 @@ def cached_orcid(tmp_path, sample_record):
 
 def test_cli_requires_uin_or_orcid(monkeypatch, tmp_path):
     """Test that CLI requires either --uin or --orcid."""
-    monkeypatch.setattr(sys, "argv", ["run_latex.py", "--output-dir", str(tmp_path)])
+    monkeypatch.setattr(sys, "argv", ["run_json.py", "--output-dir", str(tmp_path)])
 
     with pytest.raises(SystemExit) as exc_info:
-        cli.main()
+        run_json.main()
 
     assert exc_info.value.code == 2  # argparse error
 
 
 def test_cli_requires_output_dir(monkeypatch):
     """Test that --output-dir is required."""
-    monkeypatch.setattr(sys, "argv", ["run_latex.py", "--uin", "123456789"])
+    monkeypatch.setattr(sys, "argv", ["run_json.py", "--uin", "123456789"])
 
     with pytest.raises(SystemExit) as exc_info:
-        cli.main()
+        run_json.main()
 
     assert exc_info.value.code == 2  # argparse error
 
@@ -76,7 +79,7 @@ def test_cli_accepts_uin_or_orcid_mutually_exclusive(
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--uin",
             "123456789",
             "--mapping-db",
@@ -89,14 +92,14 @@ def test_cli_accepts_uin_or_orcid_mutually_exclusive(
         ],
     )
 
-    cli.main()  # Should not raise
+    run_json.main()  # Should not raise
 
     # Test with --orcid
     monkeypatch.setattr(
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -107,7 +110,7 @@ def test_cli_accepts_uin_or_orcid_mutually_exclusive(
         ],
     )
 
-    cli.main()  # Should not raise
+    run_json.main()  # Should not raise
 
 
 def test_cli_section_choices(monkeypatch, tmp_path):
@@ -116,7 +119,7 @@ def test_cli_section_choices(monkeypatch, tmp_path):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -127,7 +130,7 @@ def test_cli_section_choices(monkeypatch, tmp_path):
     )
 
     with pytest.raises(SystemExit) as exc_info:
-        cli.main()
+        run_json.main()
 
     assert exc_info.value.code == 2  # argparse error
 
@@ -141,7 +144,7 @@ def test_cli_validates_uin_format(monkeypatch, tmp_path, mapping_db):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--uin",
             "abc123",
             "--mapping-db",
@@ -153,7 +156,7 @@ def test_cli_validates_uin_format(monkeypatch, tmp_path, mapping_db):
     )
 
     with pytest.raises(SystemExit) as exc_info:
-        cli.main()
+        run_json.main()
 
     assert exc_info.value.code == 1
 
@@ -164,7 +167,7 @@ def test_cli_validates_orcid_format(monkeypatch, tmp_path):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "../../../etc/passwd",
             "--output-dir",
@@ -174,7 +177,7 @@ def test_cli_validates_orcid_format(monkeypatch, tmp_path):
     )
 
     with pytest.raises(SystemExit) as exc_info:
-        cli.main()
+        run_json.main()
 
     assert exc_info.value.code == 1
 
@@ -184,11 +187,11 @@ def test_cli_requires_mapping_db_for_uin(monkeypatch, tmp_path):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["run_latex.py", "--uin", "123456789", "--output-dir", str(tmp_path), "--no-fetch"],
+        ["run_json.py", "--uin", "123456789", "--output-dir", str(tmp_path), "--no-fetch"],
     )
 
     with pytest.raises(SystemExit) as exc_info:
-        cli.main()
+        run_json.main()
 
     assert exc_info.value.code == 1
 
@@ -199,7 +202,7 @@ def test_cli_validates_mapping_db_exists(monkeypatch, tmp_path):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--uin",
             "123456789",
             "--mapping-db",
@@ -211,7 +214,7 @@ def test_cli_validates_mapping_db_exists(monkeypatch, tmp_path):
     )
 
     with pytest.raises(SystemExit) as exc_info:
-        cli.main()
+        run_json.main()
 
     assert exc_info.value.code == 1
 
@@ -226,7 +229,7 @@ def test_cli_resolves_uin_to_orcid(monkeypatch, tmp_path, mapping_db, cached_orc
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--uin",
             "123456789",
             "--mapping-db",
@@ -239,10 +242,10 @@ def test_cli_resolves_uin_to_orcid(monkeypatch, tmp_path, mapping_db, cached_orc
         ],
     )
 
-    cli.main()
+    run_json.main()
 
     # Check that output file was created
-    assert (output_dir / "orcid-publications.tex").exists()
+    assert (output_dir / "orcid-publications.json").exists()
 
     # Check stderr output
     captured = capsys.readouterr()
@@ -256,7 +259,7 @@ def test_cli_handles_uin_not_in_database(monkeypatch, tmp_path, mapping_db, caps
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--uin",
             "000000000",
             "--mapping-db",
@@ -267,10 +270,10 @@ def test_cli_handles_uin_not_in_database(monkeypatch, tmp_path, mapping_db, caps
         ],
     )
 
-    cli.main()  # exits 0
+    run_json.main()  # exits 0
 
     # No data, no file (section contract rule 5; audit ORC-04)
-    assert not (output_dir / "orcid-publications.tex").exists()
+    assert not (output_dir / "orcid-publications.json").exists()
     captured = capsys.readouterr()
     assert "No ORCID ID on file for UIN 000000000" in captured.err
 
@@ -282,7 +285,7 @@ def test_cli_handles_null_orcid_in_database(monkeypatch, tmp_path, mapping_db, c
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--uin",
             "999999999",
             "--mapping-db",
@@ -293,9 +296,9 @@ def test_cli_handles_null_orcid_in_database(monkeypatch, tmp_path, mapping_db, c
         ],
     )
 
-    cli.main()  # exits 0
+    run_json.main()  # exits 0
 
-    assert not (output_dir / "orcid-publications.tex").exists()
+    assert not (output_dir / "orcid-publications.json").exists()
     captured = capsys.readouterr()
     assert "No ORCID ID on file for UIN 999999999" in captured.err
 
@@ -310,7 +313,7 @@ def test_cli_uses_cached_record_by_default(monkeypatch, tmp_path, cached_orcid, 
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -321,9 +324,9 @@ def test_cli_uses_cached_record_by_default(monkeypatch, tmp_path, cached_orcid, 
         ],
     )
 
-    cli.main()
+    run_json.main()
 
-    assert (output_dir / "orcid-publications.tex").exists()
+    assert (output_dir / "orcid-publications.json").exists()
     captured = capsys.readouterr()
     assert "Fetching" not in captured.err  # No fetch should happen
 
@@ -335,7 +338,7 @@ def test_cli_no_fetch_flag(monkeypatch, tmp_path, cached_orcid):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -346,8 +349,8 @@ def test_cli_no_fetch_flag(monkeypatch, tmp_path, cached_orcid):
         ],
     )
 
-    cli.main()
-    assert (output_dir / "orcid-publications.tex").exists()
+    run_json.main()
+    assert (output_dir / "orcid-publications.json").exists()
 
 
 def test_cli_handles_missing_cached_record(monkeypatch, tmp_path, capsys):
@@ -360,7 +363,7 @@ def test_cli_handles_missing_cached_record(monkeypatch, tmp_path, capsys):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0009-9999-9999",
             "--output-dir",
@@ -373,7 +376,7 @@ def test_cli_handles_missing_cached_record(monkeypatch, tmp_path, capsys):
 
     # Under --no-fetch a missing record is a cache gap: the section fails, no file.
     with pytest.raises(SystemExit) as exc:
-        cli.main()
+        run_json.main()
     assert exc.value.code == 2
     assert not output_dir.exists() or not any(output_dir.iterdir())
     assert "not cached; run `just prefetch`" in capsys.readouterr().err
@@ -389,7 +392,7 @@ def test_cli_generates_publications_section(monkeypatch, tmp_path, cached_orcid)
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -400,9 +403,9 @@ def test_cli_generates_publications_section(monkeypatch, tmp_path, cached_orcid)
         ],
     )
 
-    cli.main()
+    run_json.main()
 
-    output_file = output_dir / "orcid-publications.tex"
+    output_file = output_dir / "orcid-publications.json"
     assert output_file.exists()
 
     content = output_file.read_text()
@@ -417,7 +420,7 @@ def test_cli_generates_data_section(monkeypatch, tmp_path, cached_orcid):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -430,9 +433,9 @@ def test_cli_generates_data_section(monkeypatch, tmp_path, cached_orcid):
         ],
     )
 
-    cli.main()
+    run_json.main()
 
-    output_file = output_dir / "orcid-data.tex"
+    output_file = output_dir / "orcid-data.json"
     assert output_file.exists()
 
     content = output_file.read_text()
@@ -446,7 +449,7 @@ def test_cli_period_filter_for_publications(monkeypatch, tmp_path, cached_orcid,
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -459,7 +462,7 @@ def test_cli_period_filter_for_publications(monkeypatch, tmp_path, cached_orcid,
         ],
     )
 
-    cli.main()
+    run_json.main()
 
     captured = capsys.readouterr()
     assert "Period: CY 2024" in captured.err
@@ -473,7 +476,7 @@ def test_cli_period_ignored_for_data(monkeypatch, tmp_path, cached_orcid, capsys
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -488,7 +491,7 @@ def test_cli_period_ignored_for_data(monkeypatch, tmp_path, cached_orcid, capsys
         ],
     )
 
-    cli.main()
+    run_json.main()
 
     captured = capsys.readouterr()
     assert "the period is ignored for --section data" in captured.err
@@ -510,7 +513,7 @@ def test_cli_skips_file_creation_when_no_data(monkeypatch, tmp_path, empty_recor
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0009-0000-0000",
             "--output-dir",
@@ -521,10 +524,10 @@ def test_cli_skips_file_creation_when_no_data(monkeypatch, tmp_path, empty_recor
         ],
     )
 
-    cli.main()
+    run_json.main()
 
     # No file should be created
-    assert not (output_dir / "orcid-publications.tex").exists()
+    assert not (output_dir / "orcid-publications.json").exists()
 
 
 # ── Output and Logging ────────────────────────────────────────────────────
@@ -538,7 +541,7 @@ def test_cli_creates_output_directory(monkeypatch, tmp_path, cached_orcid):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -549,10 +552,10 @@ def test_cli_creates_output_directory(monkeypatch, tmp_path, cached_orcid):
         ],
     )
 
-    cli.main()
+    run_json.main()
 
     assert output_dir.exists()
-    assert (output_dir / "orcid-publications.tex").exists()
+    assert (output_dir / "orcid-publications.json").exists()
 
 
 def test_cli_prints_output_file_path(monkeypatch, tmp_path, cached_orcid, capsys):
@@ -563,7 +566,7 @@ def test_cli_prints_output_file_path(monkeypatch, tmp_path, cached_orcid, capsys
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -574,10 +577,10 @@ def test_cli_prints_output_file_path(monkeypatch, tmp_path, cached_orcid, capsys
         ],
     )
 
-    cli.main()
+    run_json.main()
 
     captured = capsys.readouterr()
-    assert str(output_dir / "orcid-publications.tex") in captured.out
+    assert str(output_dir / "orcid-publications.json") in captured.out
 
 
 def test_cli_logs_to_stderr(monkeypatch, tmp_path, cached_orcid, capsys):
@@ -588,7 +591,7 @@ def test_cli_logs_to_stderr(monkeypatch, tmp_path, cached_orcid, capsys):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -599,7 +602,7 @@ def test_cli_logs_to_stderr(monkeypatch, tmp_path, cached_orcid, capsys):
         ],
     )
 
-    cli.main()
+    run_json.main()
 
     captured = capsys.readouterr()
     assert "Using ORCID ID directly" in captured.err
@@ -618,7 +621,7 @@ def test_cli_rejects_invalid_period(monkeypatch, tmp_path, cached_orcid, capsys)
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -632,7 +635,7 @@ def test_cli_rejects_invalid_period(monkeypatch, tmp_path, cached_orcid, capsys)
     )
 
     with pytest.raises(SystemExit) as exc:
-        cli.main()
+        run_json.main()
     assert exc.value.code == 1
 
     captured = capsys.readouterr()
@@ -651,7 +654,7 @@ def test_cli_accepts_direct_orcid(monkeypatch, tmp_path, cached_orcid, capsys):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -662,9 +665,9 @@ def test_cli_accepts_direct_orcid(monkeypatch, tmp_path, cached_orcid, capsys):
         ],
     )
 
-    cli.main()
+    run_json.main()
 
-    assert (output_dir / "orcid-publications.tex").exists()
+    assert (output_dir / "orcid-publications.json").exists()
 
     captured = capsys.readouterr()
     assert "Using ORCID ID directly: 0000-0001-2345-6789" in captured.err
@@ -678,7 +681,7 @@ def test_cli_direct_orcid_does_not_require_mapping_db(monkeypatch, tmp_path, cac
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -689,14 +692,14 @@ def test_cli_direct_orcid_does_not_require_mapping_db(monkeypatch, tmp_path, cac
         ],
     )
 
-    cli.main()  # Should not raise
+    run_json.main()  # Should not raise
 
 
 # ── Edge Cases ────────────────────────────────────────────────────────────
 
 
 def test_cli_handles_special_characters_in_content(monkeypatch, tmp_path):
-    """Test that special characters in ORCID data are properly escaped."""
+    """Special characters reach the JSON as written; the composer escapes per format."""
     import json
 
     # Create record with special LaTeX characters
@@ -733,7 +736,7 @@ def test_cli_handles_special_characters_in_content(monkeypatch, tmp_path):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0001-2345-6789",
             "--output-dir",
@@ -744,12 +747,10 @@ def test_cli_handles_special_characters_in_content(monkeypatch, tmp_path):
         ],
     )
 
-    cli.main()
+    run_json.main()
 
-    content = (output_dir / "orcid-publications.tex").read_text()
-    # LaTeX special chars are escaped, and no bare one is left (ORC-13)
-    assert r"Paper with \& special \$ characters" in content
-    assert "&" not in content.replace(r"\&", "")
+    data = json.loads((output_dir / "orcid-publications.json").read_text())
+    assert data["journal_articles"][0]["title"] == "Paper with & special $ characters"
 
 
 def test_cli_data_dir_defaults_to_current(monkeypatch, tmp_path, cached_orcid):
@@ -767,7 +768,7 @@ def test_cli_data_dir_defaults_to_current(monkeypatch, tmp_path, cached_orcid):
             sys,
             "argv",
             [
-                "run_latex.py",
+                "run_json.py",
                 "--orcid",
                 "0000-0001-2345-6789",
                 "--output-dir",
@@ -776,8 +777,8 @@ def test_cli_data_dir_defaults_to_current(monkeypatch, tmp_path, cached_orcid):
             ],
         )
 
-        cli.main()
+        run_json.main()
 
-        assert (output_dir / "orcid-publications.tex").exists()
+        assert (output_dir / "orcid-publications.json").exists()
     finally:
         os.chdir(original_cwd)

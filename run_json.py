@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""CLI entry point for ORCID JSON export.
+"""The section entry point: ORCID publications or profile data as structured JSON.
 
-Parallel to run_latex.py (LaTeX), this outputs structured JSON for the
-composer's YAML and Word pipelines. Same CLI contract and exit codes
-(academia_orcid.cli): --uin or --orcid, --output-dir, --section, and the period
-flags (--year, --acad_year, --cal_year, --semester; academia_orcid.periods).
+The faculty composer (tamu-coe-faculty-profiles) renders it in every format.
+CLI contract and exit codes in academia_orcid.cli: --uin or --orcid,
+--output-dir, --section, the period flags (--year, --acad_year, --cal_year,
+--semester; academia_orcid.periods) and the fetch flags.
 
 Output:
     {output-dir}/orcid-data.json         (--section data)
     {output-dir}/orcid-publications.json (--section publications)
+No data, no file.
 """
 
 import argparse
@@ -18,6 +19,7 @@ from pathlib import Path
 from academia_orcid import (
     OUTPUT_DATA_JSON,
     OUTPUT_PUBLICATIONS_JSON,
+    SECTION_DATA,
     SECTION_PUBLICATIONS,
     VALID_SECTIONS,
 )
@@ -45,9 +47,9 @@ from academia_orcid.json_export import export_data, export_publications
 
 
 def main(argv: list[str] | None = None):
-    """Generate ORCID JSON export for a faculty member."""
+    """Write the ORCID JSON for a faculty member."""
     parser = argparse.ArgumentParser(
-        description="Export ORCID data as structured JSON (composer YAML/Word pipelines)."
+        description="Export ORCID publications or profile data as structured JSON."
     )
     add_common_args(parser)
     parser.add_argument(
@@ -62,6 +64,10 @@ def main(argv: list[str] | None = None):
     output_path = Path(args.output_dir)
     section = args.section
     period = resolve_period(args)
+    if not period.is_all and section == SECTION_DATA:
+        logger.info("Note: the period is ignored for --section data (all data included)")
+    elif not period.is_all:
+        logger.info(f"Period: {period.label()}")
     output_filename = (
         OUTPUT_PUBLICATIONS_JSON if section == SECTION_PUBLICATIONS else OUTPUT_DATA_JSON
     )
@@ -75,14 +81,20 @@ def main(argv: list[str] | None = None):
         logger.info(f"No {section} section.")
         return
 
-    # Extract and export
     if section == SECTION_PUBLICATIONS:
         journal_articles, conference_papers, other_publications = extract_publications(record)
-
+        total = len(journal_articles) + len(conference_papers) + len(other_publications)
         journal_articles = filter_publications_by_period(journal_articles, period)
         conference_papers = filter_publications_by_period(conference_papers, period)
         other_publications = filter_publications_by_period(other_publications, period)
-
+        if not period.is_all:
+            kept = len(journal_articles) + len(conference_papers) + len(other_publications)
+            logger.info(f"Found {total} publications, {kept} in {period.label()}")
+        else:
+            logger.info(
+                f"Found {len(journal_articles)} journal articles, "
+                f"{len(conference_papers)} conference papers, {len(other_publications)} other"
+            )
         data = export_publications(
             orcid_id,
             journal_articles,
@@ -103,7 +115,7 @@ def main(argv: list[str] | None = None):
             extract_services(record),
         )
 
-    # Don't write file if no data
+    # No data, no file: the composer goes by file existence.
     if not data:
         logger.info(f"No {section} data found; skipping file creation.")
         return

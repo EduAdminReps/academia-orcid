@@ -7,7 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from academia_orcid import cli
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import run_json  # noqa: E402
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -58,7 +60,7 @@ def test_full_latex_pipeline_with_uin(monkeypatch, integration_setup, capsys):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--uin",
             setup["uin"],
             "--mapping-db",
@@ -71,10 +73,10 @@ def test_full_latex_pipeline_with_uin(monkeypatch, integration_setup, capsys):
         ],
     )
 
-    cli.main()
+    run_json.main()
 
     # Verify output file exists
-    output_file = setup["output_dir"] / "orcid-publications.tex"
+    output_file = setup["output_dir"] / "orcid-publications.json"
     assert output_file.exists()
 
     # Verify content
@@ -97,7 +99,7 @@ def test_full_latex_pipeline_with_orcid(monkeypatch, integration_setup):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             setup["orcid"],
             "--output-dir",
@@ -108,9 +110,9 @@ def test_full_latex_pipeline_with_orcid(monkeypatch, integration_setup):
         ],
     )
 
-    cli.main()
+    run_json.main()
 
-    output_file = setup["output_dir"] / "orcid-publications.tex"
+    output_file = setup["output_dir"] / "orcid-publications.json"
     assert output_file.exists()
 
     content = output_file.read_text()
@@ -125,7 +127,7 @@ def test_full_latex_pipeline_data_section(monkeypatch, integration_setup):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             setup["orcid"],
             "--output-dir",
@@ -138,9 +140,9 @@ def test_full_latex_pipeline_data_section(monkeypatch, integration_setup):
         ],
     )
 
-    cli.main()
+    run_json.main()
 
-    output_file = setup["output_dir"] / "orcid-data.tex"
+    output_file = setup["output_dir"] / "orcid-data.json"
     assert output_file.exists()
 
     content = output_file.read_text()
@@ -159,7 +161,7 @@ def test_integration_period_single_calendar_year(monkeypatch, integration_setup,
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             setup["orcid"],
             "--output-dir",
@@ -172,9 +174,9 @@ def test_integration_period_single_calendar_year(monkeypatch, integration_setup,
         ],
     )
 
-    cli.main()
+    run_json.main()
 
-    output_file = setup["output_dir"] / "orcid-publications.tex"
+    output_file = setup["output_dir"] / "orcid-publications.json"
     assert output_file.exists()
 
     content = output_file.read_text()
@@ -192,7 +194,7 @@ def test_integration_period_fiscal_year(monkeypatch, integration_setup):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             setup["orcid"],
             "--output-dir",
@@ -205,9 +207,9 @@ def test_integration_period_fiscal_year(monkeypatch, integration_setup):
         ],
     )
 
-    cli.main()
+    run_json.main()
 
-    content = (setup["output_dir"] / "orcid-publications.tex").read_text()
+    content = (setup["output_dir"] / "orcid-publications.json").read_text()
     assert "A Journal Paper" in content  # 2024
     assert "A Conference Paper" in content  # 2023
     assert "A Book Chapter" not in content  # 2022
@@ -221,7 +223,7 @@ def test_integration_period_range(monkeypatch, integration_setup):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             setup["orcid"],
             "--output-dir",
@@ -234,9 +236,9 @@ def test_integration_period_range(monkeypatch, integration_setup):
         ],
     )
 
-    cli.main()
+    run_json.main()
 
-    output_file = setup["output_dir"] / "orcid-publications.tex"
+    output_file = setup["output_dir"] / "orcid-publications.json"
     content = output_file.read_text()
 
     assert "A Journal Paper" in content  # 2024
@@ -252,7 +254,7 @@ def test_integration_period_all(monkeypatch, integration_setup):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             setup["orcid"],
             "--output-dir",
@@ -265,9 +267,9 @@ def test_integration_period_all(monkeypatch, integration_setup):
         ],
     )
 
-    cli.main()
+    run_json.main()
 
-    output_file = setup["output_dir"] / "orcid-publications.tex"
+    output_file = setup["output_dir"] / "orcid-publications.json"
     content = output_file.read_text()
 
     # All publications should be included
@@ -287,7 +289,7 @@ def test_integration_uses_cache_first_run(monkeypatch, integration_setup, capsys
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             setup["orcid"],
             "--output-dir",
@@ -298,7 +300,7 @@ def test_integration_uses_cache_first_run(monkeypatch, integration_setup, capsys
         ],
     )
 
-    cli.main()
+    run_json.main()
 
     captured = capsys.readouterr()
     # Should not fetch (cache exists)
@@ -328,7 +330,7 @@ def test_integration_no_fetch_with_missing_cache(monkeypatch, tmp_path, capsys):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--uin",
             "123456789",
             "--mapping-db",
@@ -342,9 +344,9 @@ def test_integration_no_fetch_with_missing_cache(monkeypatch, tmp_path, capsys):
     )
 
     with pytest.raises(SystemExit) as exc:
-        cli.main()
+        run_json.main()
     assert exc.value.code == 2
-    assert not (output_dir / "orcid-publications.tex").exists()
+    assert not (output_dir / "orcid-publications.json").exists()
     assert "run `just prefetch`" in capsys.readouterr().err
 
 
@@ -359,7 +361,7 @@ def test_integration_missing_uin_writes_nothing(monkeypatch, integration_setup, 
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--uin",
             "999999999",  # Not in database
             "--mapping-db",
@@ -370,9 +372,9 @@ def test_integration_missing_uin_writes_nothing(monkeypatch, integration_setup, 
         ],
     )
 
-    cli.main()
+    run_json.main()
 
-    output_file = setup["output_dir"] / "orcid-publications.tex"
+    output_file = setup["output_dir"] / "orcid-publications.json"
     assert not output_file.exists()
 
     captured = capsys.readouterr()
@@ -384,11 +386,11 @@ def test_integration_invalid_orcid_exits(monkeypatch, tmp_path):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["run_latex.py", "--orcid", "invalid-format", "--output-dir", str(tmp_path), "--no-fetch"],
+        ["run_json.py", "--orcid", "invalid-format", "--output-dir", str(tmp_path), "--no-fetch"],
     )
 
     with pytest.raises(SystemExit) as exc_info:
-        cli.main()
+        run_json.main()
 
     assert exc_info.value.code == 1
 
@@ -405,7 +407,7 @@ def test_integration_publications_and_data_separate(monkeypatch, integration_set
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             setup["orcid"],
             "--output-dir",
@@ -417,9 +419,9 @@ def test_integration_publications_and_data_separate(monkeypatch, integration_set
             "--no-fetch",
         ],
     )
-    cli.main()
+    run_json.main()
 
-    pubs_file = setup["output_dir"] / "orcid-publications.tex"
+    pubs_file = setup["output_dir"] / "orcid-publications.json"
     assert pubs_file.exists()
 
     # Generate data
@@ -427,7 +429,7 @@ def test_integration_publications_and_data_separate(monkeypatch, integration_set
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             setup["orcid"],
             "--output-dir",
@@ -439,9 +441,9 @@ def test_integration_publications_and_data_separate(monkeypatch, integration_set
             "--no-fetch",
         ],
     )
-    cli.main()
+    run_json.main()
 
-    data_file = setup["output_dir"] / "orcid-data.tex"
+    data_file = setup["output_dir"] / "orcid-data.json"
     assert data_file.exists()
 
     # Both files should exist
@@ -452,102 +454,12 @@ def test_integration_publications_and_data_separate(monkeypatch, integration_set
 # ── LaTeX Output Validation ───────────────────────────────────────────────
 
 
-def test_integration_latex_syntax_valid(monkeypatch, integration_setup):
-    """Test that generated LaTeX has valid syntax (basic check)."""
-    setup = integration_setup
-
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "run_latex.py",
-            "--orcid",
-            setup["orcid"],
-            "--output-dir",
-            str(setup["output_dir"]),
-            "--data-dir",
-            str(setup["data_dir"]),
-            "--no-fetch",
-        ],
-    )
-
-    cli.main()
-
-    output_file = setup["output_dir"] / "orcid-publications.tex"
-    content = output_file.read_text()
-
-    # Basic LaTeX syntax checks
-    assert content.count("{") == content.count("}")  # Balanced braces
-    assert "\\" in content  # Has LaTeX commands
-    assert "\\subsection" in content  # Has subsections
-    assert "\\section{" not in content  # the composer template writes the heading (ORC-03)
-
-
-def test_integration_latex_escapes_special_characters(monkeypatch, tmp_path):
-    """Test that special characters are properly escaped in LaTeX output."""
-    # Create record with special characters
-    record = {
-        "person": {},
-        "activities-summary": {
-            "works": {
-                "group": [
-                    {
-                        "work-summary": [
-                            {
-                                "type": "journal-article",
-                                "title": {"title": {"value": "Paper with & special $ characters"}},
-                                "publication-date": {"year": {"value": "2024"}},
-                                "journal-title": {"value": "Journal"},
-                                "contributors": None,
-                                "external-ids": {"external-id": []},
-                            }
-                        ]
-                    }
-                ]
-            }
-        },
-    }
-
-    data_dir = tmp_path / "data"
-    json_dir = data_dir / "ORCID_JSON"
-    json_dir.mkdir(parents=True)
-    json_file = json_dir / "0000-0001-2345-6789.json"
-    json_file.write_text(json.dumps(record))
-
-    output_dir = tmp_path / "output"
-
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "run_latex.py",
-            "--orcid",
-            "0000-0001-2345-6789",
-            "--output-dir",
-            str(output_dir),
-            "--data-dir",
-            str(data_dir),
-            "--no-fetch",
-        ],
-    )
-
-    cli.main()
-
-    content = (output_dir / "orcid-publications.tex").read_text()
-
-    assert r"Paper with \& special \$ characters" in content
-    assert "&" not in content.replace(r"\&", "")
-
-
-# ── Multiple Runs ─────────────────────────────────────────────────────────
-
-
 def test_integration_multiple_runs_overwrite(monkeypatch, integration_setup):
     """Test that running twice overwrites the output file."""
     setup = integration_setup
 
     args = [
-        "run_latex.py",
+        "run_json.py",
         "--orcid",
         setup["orcid"],
         "--output-dir",
@@ -559,18 +471,24 @@ def test_integration_multiple_runs_overwrite(monkeypatch, integration_setup):
 
     # First run
     monkeypatch.setattr(sys, "argv", args)
-    cli.main()
+    run_json.main()
 
-    output_file = setup["output_dir"] / "orcid-publications.tex"
-    first_content = output_file.read_text()
+    output_file = setup["output_dir"] / "orcid-publications.json"
+
+    def without_time(text):
+        data = json.loads(text)
+        data["_meta"].pop("generated_at")
+        return data
+
+    first_content = without_time(output_file.read_text())
 
     # Second run over a file with other content: it must be rewritten (ORC-13)
-    output_file.write_text("% left by an earlier run")
+    output_file.write_text("{}")
 
     monkeypatch.setattr(sys, "argv", args)
-    cli.main()
+    run_json.main()
 
-    assert output_file.read_text() == first_content
+    assert without_time(output_file.read_text()) == first_content
 
 
 # ── Output Directory Creation ─────────────────────────────────────────────
@@ -586,7 +504,7 @@ def test_integration_creates_nested_output_dirs(monkeypatch, integration_setup):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             setup["orcid"],
             "--output-dir",
@@ -597,10 +515,10 @@ def test_integration_creates_nested_output_dirs(monkeypatch, integration_setup):
         ],
     )
 
-    cli.main()
+    run_json.main()
 
     assert nested_output.exists()
-    assert (nested_output / "orcid-publications.tex").exists()
+    assert (nested_output / "orcid-publications.json").exists()
 
 
 # ── Empty Record Handling ─────────────────────────────────────────────────
@@ -620,7 +538,7 @@ def test_integration_empty_record_no_file(monkeypatch, tmp_path, empty_record):
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             "0000-0009-0000-0000",
             "--output-dir",
@@ -631,10 +549,10 @@ def test_integration_empty_record_no_file(monkeypatch, tmp_path, empty_record):
         ],
     )
 
-    cli.main()
+    run_json.main()
 
     # No file should be created
-    assert not (output_dir / "orcid-publications.tex").exists()
+    assert not (output_dir / "orcid-publications.json").exists()
 
 
 # ── Stdout/Stderr Separation ──────────────────────────────────────────────
@@ -648,7 +566,7 @@ def test_integration_stdout_stderr_separation(monkeypatch, integration_setup, ca
         sys,
         "argv",
         [
-            "run_latex.py",
+            "run_json.py",
             "--orcid",
             setup["orcid"],
             "--output-dir",
@@ -659,12 +577,12 @@ def test_integration_stdout_stderr_separation(monkeypatch, integration_setup, ca
         ],
     )
 
-    cli.main()
+    run_json.main()
 
     captured = capsys.readouterr()
 
     # Stdout should have the output file path
-    assert str(setup["output_dir"] / "orcid-publications.tex") in captured.out
+    assert str(setup["output_dir"] / "orcid-publications.json") in captured.out
 
     # Stderr should have progress messages
     assert "Using ORCID ID directly" in captured.err

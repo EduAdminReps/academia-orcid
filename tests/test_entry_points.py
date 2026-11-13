@@ -1,7 +1,8 @@
-"""One contract for the three section entry points (run_latex, run_json, run_bibtex).
+"""The section entry point's contract (run_json.py; academia_orcid.cli's flags,
+UIN lookup and record load; audit ORC-12, ORC-13).
 
-They share academia_orcid.cli's flags, UIN lookup and record load, so each case
-runs against all three (audit ORC-12, ORC-13).
+The LaTeX and BibTeX entry points went on 2026-11-13: the composer renders the
+JSON (tamu-coe-faculty-profiles, formatters/report_latex.py and report_html.py).
 """
 
 import json
@@ -13,7 +14,6 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import run_bibtex  # noqa: E402
 import run_json  # noqa: E402
 from academia_orcid import cli  # noqa: E402
 from academia_orcid.fetch import OrcidFetchError  # noqa: E402
@@ -21,9 +21,7 @@ from academia_orcid.fetch import OrcidFetchError  # noqa: E402
 ORCID = "0000-0001-2345-6789"
 
 ENTRY_POINTS = {
-    "latex": (cli.main, "orcid-publications.tex"),
     "json": (run_json.main, "orcid-publications.json"),
-    "bibtex": (run_bibtex.main, "orcid-publications.bib"),
 }
 
 
@@ -159,34 +157,6 @@ def test_empty_period_writes_nothing(entry, tmp_path, data_dir):
     main, _ = entry
     main(_args(tmp_path / "out", data_dir, "--orcid", ORCID, "--no-fetch", "--cal_year", "2099"))
     assert not (tmp_path / "out").exists()
-
-
-# ── The publications summary (LaTeX only; audit ORC-03) ────────────────────
-
-
-def test_summary_written_with_the_publications(tmp_path, data_dir):
-    out = tmp_path / "out"
-    cli.main(_args(out, data_dir, "--orcid", ORCID, "--no-fetch"))
-    summary = (out / "orcid-publications-summary.tex").read_text()
-    assert f"https://orcid.org/{ORCID}" in summary
-    assert "Journal Articles: 1" in summary
-    assert r"\section{" not in (out / "orcid-publications.tex").read_text()
-
-
-def test_old_summary_removed_when_the_period_is_empty(tmp_path, data_dir):
-    out = tmp_path / "out"
-    cli.main(_args(out, data_dir, "--orcid", ORCID, "--no-fetch"))
-    (out / "orcid-publications.tex").unlink()  # as the composer does before each run
-    cli.main(_args(out, data_dir, "--orcid", ORCID, "--no-fetch", "--cal_year", "2099"))
-    assert not (out / "orcid-publications-summary.tex").exists()
-
-
-def test_data_section_has_no_heading(tmp_path, data_dir):
-    out = tmp_path / "out"
-    cli.main(_args(out, data_dir, "--orcid", ORCID, "--no-fetch", "--section", "data"))
-    content = (out / "orcid-data.tex").read_text()
-    assert r"\section{" not in content
-    assert r"\subsection{Employment}" in content
 
 
 def test_json_provenance_carries_the_cache_time(tmp_path, sample_record):

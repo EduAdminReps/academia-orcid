@@ -3,11 +3,10 @@
 Reuses extract.py functions (which already return plain dicts/lists)
 and wraps them in a standard JSON envelope with _meta section.
 
-Publication titles keep ORCID's markup (HTML tags, ``$...$`` math): the composer
-renders it for each format (owner, 2026-11-13). Entries carry ``author_names``
-(``[{family, given}]``) for the composer's author renderer, and still the
-preformatted ``authors`` string. The biography is cleaned for plain text
-(normalize.clean_for_plaintext), as before.
+Text keeps ORCID's markup (HTML tags, ``$...$`` math), titles and biography
+alike: the composer renders it for each format (owner, 2026-11-13). Entries carry
+``raw_authors`` (the credit names as written) and ``author_names``
+(``[{family, given}]``), which the composer renders as "Family, F.M.".
 
 Publications carry ``_meta.provenance``, with the same keys in academia-orcid,
 tamu-scholars and academia-openalex, so a consumer tells author-curated lists
@@ -17,8 +16,6 @@ faculty_identifiers names it), ``ids``, ``curation`` (``author-curated`` here;
 """
 
 from datetime import datetime, timezone
-
-from academia_orcid.normalize import clean_for_plaintext
 
 PROVENANCE_SOURCE = "orcid"
 CURATION = "author-curated"  # the faculty member maintains the ORCID record
@@ -68,15 +65,13 @@ def export_data(
     if not has_content:
         return {}
 
-    clean_bio = clean_for_plaintext(biography) if biography else biography
-
     return {
         "_meta": {
             "section": "orcid-data",
             "orcid_id": orcid_id,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         },
-        "biography": clean_bio,
+        "biography": biography,
         "employment": employments,
         "education": educations,
         "distinctions": distinctions,

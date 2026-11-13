@@ -4,7 +4,6 @@ import html
 import logging
 import re
 
-from .config import get_config
 from .periods import Period
 from .schema import CONFERENCE_PAPER_TYPES, JOURNAL_ARTICLE_TYPES
 
@@ -92,32 +91,9 @@ def split_name(raw: str) -> tuple[str, str]:
     return parts[-1], " ".join(parts[:-1])
 
 
-_NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv"}
-
-
-def _initials(given: str) -> str:
-    """'Jane A.' -> 'J.A.', 'Jean-Pierre' -> 'J.-P.', 'JA' -> 'J.A.'; Jr./III left out."""
-    out = []
-    for word in given.replace(".", " ").split():
-        if word.lower() in _NAME_SUFFIXES:
-            continue
-        if re.fullmatch(r"[A-Z]{2,3}", word):
-            out.append("".join(letter + "." for letter in word))
-        else:
-            out.append("-".join(part[0] + "." for part in word.split("-") if part))
-    return "".join(out)
-
-
-def format_author(raw: str) -> str:
-    """'Last, F.M.' (IEEE style) for any credit-name form."""
-    family, given = split_name(raw)
-    initials = _initials(given)
-    return f"{family}, {initials}" if initials else family
-
-
 def _name_parts(raw: str) -> dict[str, str]:
     """{"family", "given"} for one credit name (``split_name``): the structured
-    name the composer renders (``author_names``; owner, 2026-11-13)."""
+    name the composer renders as "Family, F.M." (``author_names``; owner, 2026-11-13)."""
     family, given = split_name(raw)
     return {"family": family, "given": given}
 
@@ -162,19 +138,15 @@ def collapse_duplicates(publications: list[dict]) -> list[dict]:
     return [pub for index, pub in enumerate(publications) if index in kept_ids]
 
 
-def extract_publications(record: dict, author_limit: int | None = None) -> tuple[list, list, list]:
+def extract_publications(record: dict) -> tuple[list, list, list]:
     """Extract journal articles, conference papers, and other from ORCID record.
 
     One entry per work, duplicates collapsed (``collapse_duplicates``). A work
     whose date, title, contributors or ids are null keeps what it has: an undated
-    work is listed in all-years reports (audit ORC-02).
-
-    Args:
-        record: Full ORCID record dict
-        author_limit: Max authors to display before "et al." (default: from config)
+    work is listed in all-years reports (audit ORC-02). Authors are every credit
+    name as written (``raw_authors``) and as {family, given} (``author_names``);
+    the composer renders them.
     """
-    if author_limit is None:
-        author_limit = get_config().author_limit
     works = _obj(_obj(record, "activities-summary"), "works").get("group") or []
 
     entries = []
@@ -208,12 +180,8 @@ def extract_publications(record: dict, author_limit: int | None = None) -> tuple
             all_external_ids.pop("doi", None)
             if doi:
                 all_external_ids["doi"] = doi
-            formatted = [format_author(name) for name in author_names[:author_limit]]
-            if len(author_names) > author_limit:
-                formatted.append("et al.")
             entries.append(
                 {
-                    "authors": ", ".join(formatted),
                     "raw_authors": author_names,
                     "author_names": [_name_parts(name) for name in author_names],
                     "title": title,

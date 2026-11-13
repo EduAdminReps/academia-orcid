@@ -183,9 +183,8 @@ def test_export_data_all_fields():
     assert result["_meta"]["orcid_id"] == "0000-0001-2345-6789"
     assert "generated_at" in result["_meta"]
 
-    # Biography should be cleaned (HTML stripped)
-    assert "<b>" not in result["biography"]
-    assert "Texas A&M" in result["biography"]
+    # The biography keeps its markup; the composer renders it per format
+    assert result["biography"] == "Researcher at <b>Texas A&M</b>"
 
     assert result["employment"] == employments
     assert result["education"] == educations
@@ -232,18 +231,13 @@ def test_export_data_partial_fields():
     assert result["external_identifiers"] == []
 
 
-def test_export_data_biography_cleaning():
-    """Test that biography HTML is properly cleaned."""
+def test_export_data_biography_keeps_markup():
+    """The composer renders the markup per format (owner, 2026-11-13)."""
     biography = "<i>Researcher</i> with <sub>2</sub> years experience at <b>TAMU</b>"
 
     result = export_data("0000-0001-2345-6789", biography, [], [], [], [], [], [], [])
 
-    clean_bio = result["biography"]
-    assert "<i>" not in clean_bio
-    assert "<sub>" not in clean_bio
-    assert "<b>" not in clean_bio
-    assert "Researcher" in clean_bio
-    assert "TAMU" in clean_bio
+    assert result["biography"] == biography
 
 
 def test_export_data_biography_none():

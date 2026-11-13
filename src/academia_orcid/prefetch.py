@@ -1,7 +1,6 @@
 """Bulk cache fill: download every mapped ORCID record into ORCID_JSON/.
 
-The section entry points (run_latex.py, run_json.py) fetch one record on
-demand. This command fills the cache ahead of time for every ORCID iD in the
+The section entry point (run_json.py) fetches one record on demand. This command fills the cache ahead of time for every ORCID iD in the
 ``faculty_identifiers`` table, so report runs can pass ``--no-fetch`` and never wait
 on the ORCID API.
 

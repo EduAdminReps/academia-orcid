@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "academia-orcid"
 version = "0.1.0"
-description = "ORCID data fetcher and LaTeX/JSON generator for academic vita reports"
+description = "ORCID publications and profile data as structured JSON for the faculty composer"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -28,9 +28,6 @@ dev = [
     "mypy",
 ]
 
-[project.scripts]
-academia-orcid = "academia_orcid.cli:main"
-
 [tool.setuptools.packages.find]
 where = ["src"]
 
@@ -42,23 +39,17 @@ line-length = 100
 target-version = "py310"
 # Vendored verbatim from coe-data-core (`just vendor-set` there; drift-tested):
 # never reformatted or fixed here.
-extend-exclude = ["src/academia_orcid/latex_text.py", "src/academia_orcid/periods.py"]
+extend-exclude = ["src/academia_orcid/periods.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
 ignore = ["E501"]
 
-[tool.ruff.lint.per-file-ignores]
-# These put src/ or tools/ on sys.path before importing from them.
-"tools/compose_cv.py" = ["E402"]
-"tests/test_compose_cv.py" = ["E402"]
-
 [tool.mypy]
-# `just typecheck`: the package, the tools and the entry points; the tests are
-# left out (monkeypatched, untyped). explicit_package_bases: tools/ has no
-# __init__.py.
+# `just typecheck`: the package and the entry points; the tests are left out
+# (monkeypatched, untyped).
 python_version = "3.10"
-files = ["src", "tools", "run_latex.py", "run_json.py", "run_bibtex.py", "run_prefetch.py"]
+files = ["src", "run_json.py", "run_prefetch.py"]
 mypy_path = "src"
 explicit_package_bases = true
 ignore_missing_imports = true

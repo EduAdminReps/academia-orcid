@@ -13,7 +13,6 @@ from academia_orcid.extract import (
     extract_publications,
     extract_services,
     filter_publications_by_period,
-    format_author,
     normalize_doi,
     split_name,
 )
@@ -179,27 +178,26 @@ def test_null_publication_date_keeps_the_work():
 
 def test_null_title_and_contributors_keep_the_work():
     journals, _, _ = extract_publications(_record(_work(title=None, contributors=None)))
-    assert journals[0]["title"] == "Untitled" and journals[0]["authors"] == ""
+    assert journals[0]["title"] == "Untitled" and journals[0]["author_names"] == []
 
 
 @pytest.mark.parametrize(
-    ("raw", "family", "formatted"),
+    ("raw", "family", "given"),
     [
-        ("Jane A. Doe", "Doe", "Doe, J.A."),
-        ("Doe, Jane A.", "Doe", "Doe, J.A."),  # 56% of credit-names are family-first
-        ("Doe, J.", "Doe", "Doe, J."),
-        ("Doe J", "Doe", "Doe, J."),
-        ("Smith JA", "Smith", "Smith, J.A."),
-        ("Smith John A", "Smith", "Smith, J.A."),  # a trailing initial: family first
-        ("Jean-Pierre Martin", "Martin", "Martin, J.-P."),
-        ("van der Berg, Anna", "van der Berg", "van der Berg, A."),
-        ("Doe, Jane, Jr.", "Doe", "Doe, J."),
-        ("Madonna", "Madonna", "Madonna"),
+        ("Jane A. Doe", "Doe", "Jane A."),
+        ("Doe, Jane A.", "Doe", "Jane A."),  # 56% of credit-names are family-first
+        ("Doe, J.", "Doe", "J."),
+        ("Doe J", "Doe", "J"),
+        ("Smith JA", "Smith", "JA"),
+        ("Smith John A", "Smith", "John A"),  # a trailing initial: family first
+        ("Jean-Pierre Martin", "Martin", "Jean-Pierre"),
+        ("van der Berg, Anna", "van der Berg", "Anna"),
+        ("Doe, Jane, Jr.", "Doe", "Jane  Jr."),
+        ("Madonna", "Madonna", ""),
     ],
 )
-def test_author_names_in_either_order(raw, family, formatted):
-    assert split_name(raw)[0] == family
-    assert format_author(raw) == formatted
+def test_author_names_in_either_order(raw, family, given):
+    assert split_name(raw) == (family, given)
 
 
 def test_family_first_authors_in_a_work():
@@ -207,14 +205,18 @@ def test_family_first_authors_in_a_work():
         "contributor": [{"credit-name": {"value": n}} for n in ["Doe, Jane A.", "Bo Li"]]
     }
     journals, _, _ = extract_publications(_record(_work(contributors=contributors)))
-    assert journals[0]["authors"] == "Doe, J.A., Li, B."
+    assert journals[0]["author_names"] == [
+        {"family": "Doe", "given": "Jane A."},
+        {"family": "Li", "given": "Bo"},
+    ]
+    assert "authors" not in journals[0]  # the composer renders author_names
 
 
 def test_author_names_are_structured_and_complete():
-    """author_names: every credit name as {family, given}, past the display limit too."""
+    """author_names: every credit name as {family, given}; the composer cuts to "et al."."""
     names = ["Doe, Jane A.", "Bo Li", "Smith JA", "Madonna"] + [f"Ann Extra{i}" for i in range(9)]
     contributors = {"contributor": [{"credit-name": {"value": n}} for n in names]}
-    journals, _, _ = extract_publications(_record(_work(contributors=contributors)), author_limit=2)
+    journals, _, _ = extract_publications(_record(_work(contributors=contributors)))
     parsed = journals[0]["author_names"]
     assert parsed[:4] == [
         {"family": "Doe", "given": "Jane A."},
@@ -223,7 +225,7 @@ def test_author_names_are_structured_and_complete():
         {"family": "Madonna", "given": ""},
     ]
     assert len(parsed) == len(names)
-    assert journals[0]["authors"] == "Doe, J.A., Li, B., et al."  # kept until the composer renders
+    assert journals[0]["raw_authors"] == names
 
 
 @pytest.mark.parametrize(

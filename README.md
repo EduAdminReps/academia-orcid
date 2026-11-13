@@ -1,59 +1,29 @@
 # academia-orcid
 
-Fetches academic publication and employment data from ORCID and generates LaTeX/JSON sections for faculty vita reports. Institution-agnostic — works with any UIN→ORCID mapping database.
+Fetches faculty members' ORCID records and extracts them into structured JSON —
+publications and profile data — for the College of Engineering faculty composer
+(`tamu-coe-faculty-profiles`), which renders them. Institution-agnostic: works with
+any UIN → ORCID mapping database.
 
-Can also produce **standalone CVs** (PDF or BibTeX) directly from an ORCID ID.
-
-## Standalone CV Generation
-
-Generate a complete CV from any ORCID ID — no database or composer required.
-
-```bash
-# PDF (via LaTeX)
-python tools/compose_cv.py --orcid 0000-0002-2983-9884
-
-# BibTeX bibliography
-python tools/compose_cv.py --orcid 0000-0002-2983-9884 --format bibtex
-
-# BibTeX with DOI enrichment (fills volume, pages, etc.)
-python tools/compose_cv.py --orcid 0000-0002-2983-9884 --format bibtex --enrich
-
-# Filter publications by year
-python tools/compose_cv.py --orcid 0000-0002-2983-9884 --cal_year 2020-2025
-
-# LaTeX source only (no compilation)
-python tools/compose_cv.py --orcid 0000-0002-2983-9884 --skip-compile
-```
-
-Output goes to `out_cv/{orcid-id}/`. PDF requires `pdflatex`.
-
-## Section Generation (Composer Interface)
-
-When used as a section provider for the parent composer, this package produces `.tex` and `.json` fragments:
+## Usage
 
 ```bash
 uv sync
 
-# Publications section
-python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out
-
-# ORCID data section (employment, education, etc.)
-python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out --section data
-
-# JSON output
+# Publications (default section)
 python run_json.py --orcid 0000-0002-2983-9884 --output-dir ./out
 
-# Using UIN (requires mapping database)
-python run_latex.py --uin 123456789 --output-dir ./out --mapping-db /path/to/en.db
+# Profile data (employment, education, distinctions, ...)
+python run_json.py --orcid 0000-0002-2983-9884 --output-dir ./out --section data
 
-# Year filter
-python run_latex.py --orcid 0000-0002-2983-9884 --output-dir ./out --cal_year 2020-2025
+# By UIN, through the mapping database; a period for publications
+python run_json.py --uin 123456789 --mapping-db ../coe-data-db/en.db --output-dir ./out --cal_year 2020-2025
 ```
 
-## Bulk Cache Fill
+Writes `orcid-publications.json` or `orcid-data.json`; nothing when there is no
+data. `--fetch` (default), `--no-fetch` or `--force-fetch` control the ORCID API.
 
-Download every mapped faculty member's ORCID record into `ORCID_JSON/` ahead of
-time, so report runs can pass `--no-fetch` and never wait on the API:
+## Bulk cache fill
 
 ```bash
 just prefetch                          # missing or stale (> 7 days) records
@@ -75,51 +45,8 @@ just typecheck   # mypy
 just check       # all three
 ```
 
-## Project Structure
-
-```
-academia-orcid/
-├── src/academia_orcid/             # Installable Python package
-│   ├── cli.py                      # Section-provider entry point
-│   ├── fetch.py                    # ORCID API client and caching
-│   ├── prefetch.py                 # Bulk cache fill for every mapped ORCID
-│   ├── extract.py                  # Data extraction from ORCID records
-│   ├── latex.py                    # LaTeX generation
-│   ├── json_export.py              # JSON export
-│   ├── bibtex_export.py            # BibTeX export
-│   ├── enrich.py                   # DOI content negotiation enrichment
-│   ├── normalize.py                # Text normalization (HTML, LaTeX, Unicode)
-│   └── schema.py                   # ORCID v3.0 TypedDict definitions
-├── tools/                          # Standalone CV tools
-│   ├── compose_cv.py               # CV generator (--format latex | bibtex)
-│   └── templates/                  # LaTeX templates for standalone CV
-├── tests/                          # Test suite
-├── run_latex.py                    # Composer entry point (LaTeX)
-├── run_json.py                     # Composer entry point (JSON)
-├── run_bibtex.py                   # Composer entry point (BibTeX)
-├── run_prefetch.py                 # Bulk cache fill (wrapper for prefetch.py)
-└── pyproject.toml
-```
-
-## Section-Provider CLI Options
-
-| Option | Required | Default | Description |
-|--------|----------|---------|-------------|
-| `--uin` | Yes* | — | Faculty UIN (*exactly one of `--uin`, `--orcid`) |
-| `--orcid` | Yes* | — | ORCID ID directly |
-| `--output-dir` | Yes | — | Output directory for .tex/.json files |
-| `--section` | No | `publications` | Section type: `publications` or `data` |
-| `--year` / `--acad_year` / `--cal_year` / `--semester` | No | all years | Report period for publications (ignored for data section). `--year` is a fiscal year (Fall Y−1 + Spring Y); forms `2024`, `2020-2025`, `2020+`, `all` |
-| `--fetch` / `--no-fetch` / `--force-fetch` | No | `--fetch` | ORCID API fetch control |
-| `--mapping-db` | Yes** | — | SQLite database (en.db) with the `faculty_identifiers` table (**required with `--uin`) |
-
-## Dependencies
-
-```
-requests        # ORCID API calls
-pdflatex        # PDF compilation (optional, system requirement)
-```
+See `CLAUDE.md` for the JSON shape, the extraction rules and the CLI contract.
 
 ## Credits
 
-Uses [ORCID Public API v3.0](https://info.orcid.org/documentation/integration-guide/orcid-public-api-v3-0/).
+Uses the [ORCID Public API v3.0](https://info.orcid.org/documentation/integration-guide/orcid-public-api-v3-0/).

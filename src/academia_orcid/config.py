@@ -35,12 +35,7 @@ DEFAULT_CONFIG: dict[str, dict[str, Any]] = {
         "ttl_seconds": 7 * 24 * 60 * 60,  # 7 days
         "dir_name": "ORCID_JSON",
     },
-    "enrich": {
-        "doi_timeout": 10,
-        "contact_email": "",  # Used in User-Agent for DOI requests; empty = generic
-    },
     "output": {
-        "author_limit": 5,
         "json_indent": 2,
     },
 }
@@ -202,24 +197,9 @@ class Config:
         return self.get("cache", "dir_name")
 
     @property
-    def author_limit(self) -> int:
-        """Get author display limit."""
-        return self.get("output", "author_limit")
-
-    @property
     def json_indent(self) -> int:
         """Get JSON output indentation."""
         return self.get("output", "json_indent")
-
-    @property
-    def doi_timeout(self) -> int:
-        """Get DOI content negotiation timeout in seconds."""
-        return self.get("enrich", "doi_timeout")
-
-    @property
-    def contact_email(self) -> str:
-        """Get contact email for DOI request User-Agent header."""
-        return self.get("enrich", "contact_email")
 
 
 # Global default config instance
