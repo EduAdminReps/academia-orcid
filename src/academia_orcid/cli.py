@@ -3,7 +3,7 @@ ORCID lookup and the record load, with one set of exit codes (hand-aligned with
 tamu-scholars' cli.py and academia-openalex's section_cli.py):
 
 - 0: done, with or without data (no data writes no file; section contract rule 5)
-- 1: bad input (malformed --uin/--orcid/period, no --mapping-db, an en.db
+- 1: bad input (malformed --uin/--orcid, no --mapping-db, an en.db
   without ``faculty_identifiers``)
 - 2: argparse errors; the ORCID API failed with nothing cached; under
   ``--no-fetch`` a mapped ORCID with no cache file
@@ -24,7 +24,6 @@ from academia_orcid.fetch import (
     validate_orcid_id,
 )
 from academia_orcid.logging_config import setup_logging
-from academia_orcid.periods import Period, add_period_args, period_from_args
 
 
 def validate_uin(uin: str) -> bool:
@@ -43,19 +42,6 @@ def validate_uin(uin: str) -> bool:
     return bool(re.match(r"^\d{9}$", uin))
 
 
-def resolve_period(args: argparse.Namespace) -> Period:
-    """The report period from --year / --acad_year / --cal_year / --semester.
-
-    Same meaning in every COE repo (``academia_orcid.periods``); no flag means
-    all years. Exits 1 with a message on a malformed value (fail fast).
-    """
-    try:
-        return period_from_args(args)
-    except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
-
-
 def add_common_args(parser: argparse.ArgumentParser) -> None:
     """The flags of the section entry point (run_json.py); it adds --section."""
     who = parser.add_mutually_exclusive_group(required=True)
@@ -63,7 +49,6 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     who.add_argument("--orcid", help="ORCID ID directly (bypasses the UIN→ORCID mapping)")
     parser.add_argument("--output-dir", required=True, help="Output directory")
     parser.add_argument("--data-dir", default=".", help="Base directory containing ORCID_JSON/")
-    add_period_args(parser)  # publications only; ignored for --section data
     fetch_group = parser.add_mutually_exclusive_group()
     fetch_group.add_argument(
         "--fetch",

@@ -26,10 +26,9 @@ academia-orcid/
 │   ├── cli.py                  # run_json's plumbing: flags, UIN → ORCID, record load, exit codes
 │   ├── fetch.py                # ORCID API client, ORCID_JSON/ cache, UIN → ORCID lookup
 │   ├── prefetch.py             # bulk cache fill for every mapped ORCID
-│   ├── extract.py              # record → publication entries and profile data; period filter
+│   ├── extract.py              # record → publication entries and profile data
 │   ├── json_export.py          # the JSON envelope (_meta, provenance)
-│   ├── config.py, logging_config.py, schema.py (ORCID v3.0 TypedDicts)
-│   └── periods.py              # vendored coe_core.periods (`just vendor-set` there); never edit
+│   └── config.py, logging_config.py, schema.py (ORCID v3.0 TypedDicts)
 ├── tests/
 ├── ORCID_JSON/                 # cached records (gitignored)
 └── justfile                    # prefetch, test, lint, typecheck, format, check
@@ -40,19 +39,14 @@ academia-orcid/
 ```bash
 python run_json.py --uin <uin> --mapping-db ../coe-data-db/en.db --output-dir <dir>   # publications
 python run_json.py --orcid 0000-0002-2983-9884 --output-dir <dir> --section data
-# + a period flag (--year | --acad_year | --cal_year | --semester; publications only)
 # + --fetch (default) | --no-fetch | --force-fetch
 # → <dir>/orcid-publications.json or orcid-data.json; no file when there is nothing
 ```
 
 - Exactly one of `--uin` (looked up in `--mapping-db`) and `--orcid`.
-- **Period flags** (the vendored `periods.py`, one meaning in every COE repo):
-  `--year Y` fiscal (Fall Y−1 + Spring Y), `--acad_year Y` (+ Summer Y), `--cal_year Y`,
-  `--semester YYYYSC`; forms `2024`, `2020-2025`, `2020+`, `all`; no flag = all years.
-  A publication dated by month is kept when that month's term is in the period, one
-  with only a year when that calendar year overlaps it; an undated one only in
-  all-years output (owner, 2026-11-12). `--section data` ignores the period.
-- **Exit codes:** 0 done, with or without data; 1 bad input (malformed id or period,
+- **No period flag** (2026-11-13): every publication is written, with its `year`
+  and `month`; the composer keeps the report period's.
+- **Exit codes:** 0 done, with or without data; 1 bad input (malformed id,
   no `--mapping-db`, an en.db without `faculty_identifiers`, i.e. older than schema
   v17); 2 argparse errors, a fetch that failed with nothing cached, `--no-fetch`
   with nothing cached ("run `just prefetch`": a cache gap is not "no data"). A
@@ -119,16 +113,14 @@ work whose detail call fails keeps its summary (no contributors); the record is
 
 ## Shared code (with tamu-scholars and academia-openalex)
 
-- **Vendored** from coe-data-core: `periods.py` (drift-tested there; change it there
-  and run its `just vendor-set`).
 - **Hand-aligned copies** (owner, 2026-11-12; no drift test): `cli.py` (common flags,
-  `resolve_period`, id lookup, `load_record`, exit codes; academia-openalex's
+  id lookup, `load_record`, exit codes; academia-openalex's
   `section_cli.py`), `fetch.py` (whole-file cache write, en.db lookup, partial
   records), `prefetch.py` (scope options, outcomes, exit code; not in
   academia-openalex), `config.py`, `logging_config.py`, and in `extract.py`
-  `filter_publications_by_period` and `collapse_duplicates`. A change to one is
-  checked against the others unless source-specific. If fixes drift again, vendor
-  the source-neutral parts from coe-data-core.
+  `collapse_duplicates`. A change to one is
+  checked against the others unless source-specific. Nothing is vendored from
+  coe-data-core any more: the period and the rendering are the composer's.
 
 ## Development
 

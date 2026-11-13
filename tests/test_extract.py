@@ -12,69 +12,13 @@ from academia_orcid.extract import (
     extract_memberships,
     extract_publications,
     extract_services,
-    filter_publications_by_period,
     normalize_doi,
     split_name,
 )
-from academia_orcid.periods import ALL, period_from_flag
 from tests.conftest import _make_work
 
-# ── filter_publications_by_period ──────────────────────────────────────────
-# Parsing and the meaning of the flags are tested in coe-data-core
-# (tests/test_periods.py); a publication's year is a calendar year.
-
-
-def test_filter_by_calendar_range():
-    pubs = [
-        {"title": "Old", "year": "2018"},
-        {"title": "In range", "year": "2022"},
-        {"title": "Recent", "year": "2024"},
-    ]
-    result = filter_publications_by_period(pubs, period_from_flag("cal_year", "2020-2025"))
-    assert [p["title"] for p in result] == ["In range", "Recent"]
-
-
-def test_filter_all_years_keeps_everything():
-    pubs = [{"title": "A", "year": "2020"}, {"title": "B", "year": "2024"}]
-    assert filter_publications_by_period(pubs, ALL) == pubs
-
-
-def test_filter_fiscal_year_spans_two_calendar_years():
-    # FY2024 = Fall 2023 + Spring 2024
-    pubs = [{"title": y, "year": y} for y in ("2022", "2023", "2024", "2025")]
-    result = filter_publications_by_period(pubs, period_from_flag("year", "2024"))
-    assert [p["title"] for p in result] == ["2023", "2024"]
-
-
-def test_filter_academic_year_spans_two_calendar_years():
-    pubs = [{"title": y, "year": y} for y in ("2022", "2023", "2024", "2025")]
-    result = filter_publications_by_period(pubs, period_from_flag("acad_year", "2024"))
-    assert [p["title"] for p in result] == ["2023", "2024"]
-
-
-def test_filter_open_ended():
-    pubs = [{"title": y, "year": y} for y in ("2019", "2020", "2026")]
-    result = filter_publications_by_period(pubs, period_from_flag("cal_year", "2020+"))
-    assert [p["title"] for p in result] == ["2020", "2026"]
-
-
-def test_filter_semester():
-    pubs = [{"title": y, "year": y} for y in ("2023", "2024")]
-    result = filter_publications_by_period(pubs, period_from_flag("semester", "202431"))
-    assert [p["title"] for p in result] == ["2024"]
-
-
-def test_filter_missing_or_unparseable_year_left_out_of_period_reports():
-    """Undated works appear only in all-years reports (owner, 2026-11-12; ORC-16)."""
-    pubs = [
-        {"title": "No year", "year": ""},
-        {"title": "Odd year", "year": "circa 2020"},
-        {"title": "Has year", "year": "2022"},
-        {"title": "Out", "year": "2010"},
-    ]
-    result = filter_publications_by_period(pubs, period_from_flag("cal_year", "2020-2025"))
-    assert [p["title"] for p in result] == ["Has year"]
-    assert filter_publications_by_period(pubs, period_from_flag("cal_year", "all")) == pubs
+# The report period is the composer's (tamu-coe-faculty-profiles,
+# formatters/publications.py): this repo returns every publication.
 
 
 # ── extract_publications ───────────────────────────────────────────────────
@@ -292,17 +236,6 @@ def test_duplicate_works_are_collapsed():
         ("Graph learning for power systems", "2023", ""),
     ]
     assert conferences == []  # same DOI as the journal article: kept as the article
-
-
-def test_month_narrows_the_period():
-    """A 2024 work dated March is Spring 2024: FY2024, not FY2025 (ORC-16)."""
-    pubs = [
-        {"title": "March", "year": "2024", "month": "03"},
-        {"title": "October", "year": "2024", "month": "10"},
-        {"title": "Year only", "year": "2024", "month": ""},
-    ]
-    fy2025 = filter_publications_by_period(pubs, period_from_flag("year", "2025"))
-    assert [p["title"] for p in fy2025] == ["October", "Year only"]
 
 
 def test_title_keeps_markup_with_whitespace_collapsed():

@@ -16,12 +16,12 @@ python run_json.py --orcid 0000-0002-2983-9884 --output-dir ./out
 # Profile data (employment, education, distinctions, ...)
 python run_json.py --orcid 0000-0002-2983-9884 --output-dir ./out --section data
 
-# By UIN, through the mapping database; a period for publications
-python run_json.py --uin 123456789 --mapping-db ../coe-data-db/en.db --output-dir ./out --cal_year 2020-2025
+# By UIN, through the mapping database
+python run_json.py --uin 123456789 --mapping-db ../coe-data-db/en.db --output-dir ./out
 ```
 
-Writes `orcid-publications.json` or `orcid-data.json`; nothing when there is no
-data. `--fetch` (default), `--no-fetch` or `--force-fetch` control the ORCID API.
+Writes `orcid-publications.json` (every publication; the composer selects the
+report period) or `orcid-data.json`; nothing when there is no data. `--fetch` (default), `--no-fetch` or `--force-fetch` control the ORCID API.
 
 ## Bulk cache fill
 

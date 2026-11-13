@@ -442,61 +442,6 @@ def test_cli_generates_data_section(monkeypatch, tmp_path, cached_orcid):
     assert "Texas A" in content  # Employment data
 
 
-def test_cli_period_filter_for_publications(monkeypatch, tmp_path, cached_orcid, capsys):
-    """Test period filtering for publications section."""
-    output_dir = tmp_path / "output"
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "run_json.py",
-            "--orcid",
-            "0000-0001-2345-6789",
-            "--output-dir",
-            str(output_dir),
-            "--data-dir",
-            str(cached_orcid),
-            "--cal_year",
-            "2024",
-            "--no-fetch",
-        ],
-    )
-
-    run_json.main()
-
-    captured = capsys.readouterr()
-    assert "Period: CY 2024" in captured.err
-    assert "in CY 2024" in captured.err
-
-
-def test_cli_period_ignored_for_data(monkeypatch, tmp_path, cached_orcid, capsys):
-    """Test that the period is ignored for data section."""
-    output_dir = tmp_path / "output"
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "run_json.py",
-            "--orcid",
-            "0000-0001-2345-6789",
-            "--output-dir",
-            str(output_dir),
-            "--data-dir",
-            str(cached_orcid),
-            "--section",
-            "data",
-            "--year",
-            "2024",
-            "--no-fetch",
-        ],
-    )
-
-    run_json.main()
-
-    captured = capsys.readouterr()
-    assert "the period is ignored for --section data" in captured.err
-
-
 def test_cli_skips_file_creation_when_no_data(monkeypatch, tmp_path, empty_record):
     """Test that no file is created when there's no data (empty record)."""
     import json
@@ -611,36 +556,6 @@ def test_cli_logs_to_stderr(monkeypatch, tmp_path, cached_orcid, capsys):
 
 
 # ── Error Handling ────────────────────────────────────────────────────────
-
-
-def test_cli_rejects_invalid_period(monkeypatch, tmp_path, cached_orcid, capsys):
-    """A malformed period fails fast (exit 1) instead of silently reporting all years."""
-    output_dir = tmp_path / "output"
-
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "run_json.py",
-            "--orcid",
-            "0000-0001-2345-6789",
-            "--output-dir",
-            str(output_dir),
-            "--data-dir",
-            str(cached_orcid),
-            "--year",
-            "invalid",
-            "--no-fetch",
-        ],
-    )
-
-    with pytest.raises(SystemExit) as exc:
-        run_json.main()
-    assert exc.value.code == 1
-
-    captured = capsys.readouterr()
-    assert "--year must be YYYY" in captured.err
-    assert not output_dir.exists()
 
 
 # ── Direct ORCID ID Usage ─────────────────────────────────────────────────

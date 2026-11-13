@@ -1,35 +1,17 @@
-"""Extract publication and data fields from ORCID records."""
+"""Extract publication and data fields from ORCID records.
+
+Every publication is returned: the composer (tamu-coe-faculty-profiles) keeps the
+report period's, by ``year`` and ``month`` (2026-11-13).
+"""
 
 import html
 import logging
 import re
 
-from .periods import Period
 from .schema import CONFERENCE_PAPER_TYPES, JOURNAL_ARTICLE_TYPES
 
 # Module logger
 logger = logging.getLogger("academia_orcid.extract")
-
-
-def filter_publications_by_period(publications: list[dict], period: Period) -> list[dict]:
-    """Keep the publications dated inside the report period.
-
-    All years (no flag, or ``all``): every publication, undated ones included.
-    A period: a publication with a month is kept when that month's term is in the
-    period, one with only a year when that calendar year overlaps it (with
-    ``--year 2024``, fiscal: Fall 2023 + Spring 2024, a 2023 work dated March is
-    left out). A publication with no year, or an unparseable one, is left out of
-    every period report and shown only in all-years reports (owner, 2026-11-12;
-    audit ORC-16).
-    """
-    if period.is_all:
-        return publications
-    kept = []
-    for pub in publications:
-        year = str(pub.get("year") or "").strip()
-        if re.fullmatch(r"\d{4}", year) and period.overlaps_date(year, pub.get("month") or None):
-            kept.append(pub)
-    return kept
 
 
 def _obj(parent: object, key: str) -> dict:

@@ -153,12 +153,6 @@ def test_fetch_error_with_nothing_cached_exits_2(entry, tmp_path, monkeypatch):
     assert not (tmp_path / "out").exists()
 
 
-def test_empty_period_writes_nothing(entry, tmp_path, data_dir):
-    main, _ = entry
-    main(_args(tmp_path / "out", data_dir, "--orcid", ORCID, "--no-fetch", "--cal_year", "2099"))
-    assert not (tmp_path / "out").exists()
-
-
 def test_json_provenance_carries_the_cache_time(tmp_path, sample_record):
     """run_json stamps the record's fetch time into _meta.provenance."""
     record = dict(sample_record, _cache_metadata={"cached_at": "2026-11-13T00:00:00+00:00"})
