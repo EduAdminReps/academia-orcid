@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from academia_orcid import prefetch as pf
-from academia_orcid.fetch import OrcidFetchError
+from academia_orcid.fetch import OrcidFetchError, OrcidNotFound
 
 FRESH = {"cached_at": datetime.now(timezone.utc).isoformat(), "ttl_seconds": 604800}
 STALE = {
@@ -142,6 +142,32 @@ class TestPrefetch:
         counts = pf.prefetch([("1", "../../etc/passwd")], tmp_path)
         assert calls == []
         assert counts["invalid"] == 1
+
+
+class TestNotFound:
+    """HTTP 404: no such record, remembered, not a failure (owner, 2026-11-13, as tamu-scholars)."""
+
+    def test_404_is_counted_not_found_and_remembered(self, tmp_path, monkeypatch):
+        from academia_orcid import fetch
+
+        class Response:
+            status_code = 404
+
+        monkeypatch.setattr(fetch.requests, "get", lambda *a, **k: Response())
+        pair = [("1", "0000-0001-0000-0001")]
+        counts = pf.prefetch(pair, tmp_path)
+        assert counts["not found"] == 1 and counts["failed"] == 0
+        again = pf.prefetch(pair, tmp_path)  # marker fresh: not refetched
+        assert again["not found"] == 1 and again["fetched"] == 0
+
+    def test_404_exits_0(self, tmp_path, monkeypatch):
+        db = _db(tmp_path, [("111111111", "0000-0001-0000-0001")])
+
+        def gone(orcid, data_dir):
+            raise OrcidNotFound("HTTP 404")
+
+        monkeypatch.setattr(pf, "fetch_orcid_record", gone)
+        assert pf.main(["--mapping-db", str(db), "--data-dir", str(tmp_path)]) == 0
 
 
 class TestMain:

@@ -20,7 +20,6 @@ from academia_orcid import (
     OUTPUT_DATA_JSON,
     OUTPUT_PUBLICATIONS_JSON,
     SECTION_PUBLICATIONS,
-    VALID_SECTIONS,
 )
 from academia_orcid.cli import (
     add_common_args,
@@ -49,12 +48,6 @@ def main(argv: list[str] | None = None):
         description="Export ORCID publications or profile data as structured JSON."
     )
     add_common_args(parser)
-    parser.add_argument(
-        "--section",
-        default=SECTION_PUBLICATIONS,
-        choices=VALID_SECTIONS,
-        help="Section to export: publications or data",
-    )
     args = parser.parse_args(argv)
     logger = setup_from_args(args, "academia_orcid.run_json")
 

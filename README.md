@@ -5,6 +5,10 @@ publications and profile data — for the College of Engineering faculty compose
 (`tamu-coe-faculty-profiles`), which renders them. Institution-agnostic: works with
 any UIN → ORCID mapping database.
 
+One of three publication sources with one command-line contract and one JSON
+shape: `tamu-scholars` is its twin (Scholars@TAMU, also author-curated), and
+`academia-openalex` adds OpenAlex's aggregated attribution.
+
 ## Usage
 
 ```bash
@@ -21,12 +25,14 @@ python run_json.py --uin 123456789 --mapping-db ../coe-data-db/en.db --output-di
 ```
 
 Writes `orcid-publications.json` (every publication; the composer selects the
-report period) or `orcid-data.json`; nothing when there is no data. `--fetch` (default), `--no-fetch` or `--force-fetch` control the ORCID API.
+report period) or `orcid-data.json`. Nothing is written when there is no data,
+including an iD ORCID has no record for (HTTP 404). `--fetch` (default),
+`--no-fetch` or `--force-fetch` control the ORCID API.
 
 ## Bulk cache fill
 
 ```bash
-just prefetch                          # missing or stale (> 7 days) records
+just prefetch                          # missing, stale (> 7 days) or partial records
 just prefetch --dry-run                # list what would be downloaded
 just prefetch --force                  # refresh everything
 just prefetch --dept MEEN              # current faculty of one department (repeatable)
@@ -34,7 +40,9 @@ just prefetch --uin 123456789          # one person (repeatable); or --uin-file 
 ```
 
 Fresh records are skipped, so an interrupted run can be rerun to resume. Exit
-code 1 means at least one record failed to download (the rest are kept).
+code 1 means a record failed to download (the rest are kept) or the mapping holds
+a malformed iD. An iD ORCID has no record for (HTTP 404) is counted `not found`,
+not a failure.
 
 ## Development
 

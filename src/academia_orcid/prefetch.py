@@ -6,9 +6,10 @@ on the ORCID API.
 
 A record is downloaded when it is missing, unreadable, older than the cache
 TTL (``cache.ttl_seconds``, 7 days by default), or was cached with some work
-details missing (``partial``); complete fresh records are skipped. Each record
-is written whole (a temporary file renamed over the old one), so an interrupted
-run can simply be rerun.
+details missing (``partial``); complete fresh records are skipped. An iD the API
+answers 404 for is ``not found``: remembered in the cache and asked again after
+the TTL, not a failure. Each record is written whole (a temporary file renamed
+over the old one), so an interrupted run can simply be rerun.
 
 Usage (through the justfile, which supplies --mapping-db):
     just prefetch                          # every mapped ORCID iD
@@ -37,8 +38,10 @@ from .fetch import (
     IDENTIFIERS_TABLE,
     ORCID_SCHEME,
     OrcidFetchError,
+    OrcidNotFound,
     fetch_orcid_record,
     is_cache_fresh,
+    is_not_found_marker,
     load_orcid_record,
     missing_work_details,
     validate_orcid_id,
@@ -161,9 +164,11 @@ def prefetch(
     """Fill the cache for each (UIN, ORCID) pair; return outcome counts.
 
     Outcomes: ``fresh`` (skipped), ``fetched``, ``would-fetch`` (dry run),
-    ``failed`` (API error), ``invalid`` (malformed ORCID iD in the mapping), and
+    ``failed`` (API error), ``invalid`` (malformed ORCID iD in the mapping),
     ``partial`` (fetched, but some work details could not be downloaded; also
-    counted as ``fetched``, and refetched next run).
+    counted as ``fetched``, and refetched next run), and ``not found`` (the API
+    answers 404 for the iD, now or within the cache TTL: remembered in the cache,
+    not a failure; owner, 2026-11-13, as tamu-scholars).
     """
     ttl = get_config().cache_ttl
     counts: Counter = Counter()
@@ -177,10 +182,15 @@ def prefetch(
             counts["invalid"] += 1
             continue
 
-        reason = fetch_reason(load_orcid_record(data_dir, orcid), ttl, force)
+        cached = load_orcid_record(data_dir, orcid)
+        reason = fetch_reason(cached, ttl, force)
         if reason is None:
-            logger.debug(f"{tag}: fresh, skipped")
-            counts["fresh"] += 1
+            if is_not_found_marker(cached):
+                logger.info(f"{tag}: no such record (HTTP 404 within the cache TTL), skipped")
+                counts["not found"] += 1
+            else:
+                logger.debug(f"{tag}: fresh, skipped")
+                counts["fresh"] += 1
             continue
 
         if dry_run:
@@ -190,6 +200,10 @@ def prefetch(
 
         try:
             record = fetch_orcid_record(orcid, data_dir)
+        except OrcidNotFound:
+            logger.warning(f"{tag}: no such record (HTTP 404); recorded, asked again after the TTL")
+            counts["not found"] += 1
+            continue
         except OrcidFetchError as e:
             logger.error(f"{tag}: fetch failed: {e}")
             counts["failed"] += 1
@@ -216,7 +230,7 @@ def prefetch(
 
 
 def _summary(counts: Counter) -> str:
-    order = ["fetched", "partial", "would-fetch", "fresh", "failed", "invalid"]
+    order = ["fetched", "partial", "would-fetch", "fresh", "not found", "failed", "invalid"]
     return ", ".join(f"{counts[k]} {k}" for k in order if counts[k])
 
 
@@ -298,6 +312,11 @@ def main(argv: list[str] | None = None, default_data_dir: Path | None = None) ->
         return 130
 
     logger.info(f"Done: {_summary(counts) or 'nothing to do'}")
+    if counts["not found"]:
+        logger.warning(
+            f"{counts['not found']} mapped ORCID iD(s) have no record (HTTP 404): their "
+            "faculty_identifiers rows need review upstream"
+        )
     if counts["invalid"]:
         logger.error(
             f"{counts['invalid']} malformed ORCID iD(s) in faculty_identifiers: fix them "

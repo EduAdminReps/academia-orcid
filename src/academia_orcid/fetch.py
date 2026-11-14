@@ -28,6 +28,30 @@ class OrcidFetchError(Exception):
     """
 
 
+class OrcidNotFound(OrcidFetchError):
+    """The API answered 404: ORCID has no such record (most likely a wrong iD in
+    faculty_identifiers, as iDs are persistent). Not a transient failure: it is
+    remembered in the cache (``NOT_FOUND_KEY``) and reported as "no profile", as
+    in tamu-scholars and academia-openalex (owner, 2026-11-13)."""
+
+
+# A cached record carrying this key: the API answered 404 at the time it holds.
+# On its own (no record data) it is a marker; on a full record it means the
+# record has gone since, and the one cached before is kept.
+NOT_FOUND_KEY = "_not_found"
+
+
+def _has_record_data(record: dict) -> bool:
+    return bool(record.get("person") or record.get("activities-summary"))
+
+
+def is_not_found_marker(record: dict | None) -> bool:
+    """True for a cached 404 marker: no record data, only the note that there is none."""
+    if not record:
+        return False
+    return bool(record.get(NOT_FOUND_KEY)) and not _has_record_data(record)
+
+
 # Module logger
 logger = logging.getLogger("academia_orcid.fetch")
 
@@ -196,6 +220,21 @@ def _write_cache(data_dir: Path, orcid_id: str, record: dict) -> None:
         logger.warning(f"Failed to write cache file for {orcid_id}: {e}")
 
 
+def _record_not_found(data_dir: Path, orcid_id: str) -> None:
+    """Remember a 404. A cached record with data is kept and flagged (its data
+    stays in use, and it stays stale, so it is asked for again next time);
+    otherwise a marker is written, fresh for the cache TTL, so the iD is not
+    refetched daily (as tamu-scholars and academia-openalex)."""
+    at = datetime.now(timezone.utc).isoformat()
+    cached = load_orcid_record(data_dir, orcid_id)
+    if cached and _has_record_data(cached):
+        cached[NOT_FOUND_KEY] = {"status": 404, "at": at}
+        _write_cache(data_dir, orcid_id, cached)
+        return
+    marker = {NOT_FOUND_KEY: {"status": 404, "at": at}}
+    _write_cache(data_dir, orcid_id, add_cache_metadata(marker))
+
+
 def fetch_work_details(orcid_id: str, put_code: str, max_retries: int | None = None) -> dict | None:
     """Fetch detailed work information from ORCID API."""
     if not REQUESTS_AVAILABLE:
@@ -315,7 +354,8 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path) -> dict | None:
         ORCID record dict, or None for validation failures (invalid ID, missing requests).
 
     Raises:
-        OrcidFetchError: On API errors (non-200 status, network errors, timeouts).
+        OrcidNotFound: HTTP 404, ORCID has no such record (remembered in the cache).
+        OrcidFetchError: On other API errors (non-200 status, network errors, timeouts).
     """
     if not REQUESTS_AVAILABLE:
         logger.warning("requests library not available, cannot fetch ORCID record")
@@ -340,6 +380,9 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path) -> dict | None:
             f"Network error fetching ORCID record for {orcid_id}: {type(e).__name__}: {e}"
         ) from e
 
+    if response.status_code == 404:
+        _record_not_found(data_dir, orcid_id)
+        raise OrcidNotFound(f"ORCID API returned HTTP 404 for {orcid_id}")
     if response.status_code != 200:
         raise OrcidFetchError(f"ORCID API returned HTTP {response.status_code} for {orcid_id}")
 
@@ -397,9 +440,21 @@ def fetch_orcid_record(orcid_id: str, data_dir: Path) -> dict | None:
 
 
 def _fetch_or_fall_back(orcid_id: str, data_dir: Path, cached: dict | None) -> dict | None:
-    """Fetch the record; if that fails and a cached one exists, use it with a warning."""
+    """Fetch the record; if that fails and a cached one exists, use it with a warning.
+
+    A 404 falls back only to a cached record with data (the record has gone since);
+    with none, OrcidNotFound reaches the caller, which reports no profile.
+    """
     try:
         return fetch_orcid_record(orcid_id, data_dir)
+    except OrcidNotFound:
+        if not (cached and _has_record_data(cached)):
+            raise
+        logger.warning(
+            f"ORCID has no record {orcid_id} any more (HTTP 404); using the record "
+            f"cached on {(cached.get('_cache_metadata') or {}).get('cached_at', '?')[:10]}"
+        )
+        return cached
     except OrcidFetchError as e:
         if not cached:
             raise
@@ -428,9 +483,12 @@ def get_or_fetch_orcid_record(
 
     A failed refetch (stale or forced) falls back to the cached record, with a
     warning: usable data beats a failed section during an API outage (owner,
-    2026-11-12; audit SCH-11, same here).
+    2026-11-12; audit SCH-11, same here). A 404 is remembered in the cache
+    (``NOT_FOUND_KEY``): a marker when nothing was cached, which this returns
+    while it is fresh (``is_not_found_marker``).
 
     Raises:
+        OrcidNotFound: HTTP 404, with no cached record with data to fall back to.
         OrcidFetchError: Propagated from fetch_orcid_record() on API errors,
             when no cached record exists to fall back to.
     """

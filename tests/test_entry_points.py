@@ -8,6 +8,7 @@ JSON (tamu-coe-faculty-profiles, formatters/report_latex.py and report_html.py).
 import json
 import sqlite3
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -16,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import run_json  # noqa: E402
 from academia_orcid import cli  # noqa: E402
-from academia_orcid.fetch import OrcidFetchError  # noqa: E402
+from academia_orcid.fetch import OrcidFetchError, OrcidNotFound  # noqa: E402
 
 ORCID = "0000-0001-2345-6789"
 
@@ -172,6 +173,30 @@ def test_fetch_error_with_nothing_cached_exits_2(entry, tmp_path, monkeypatch):
         main(_args(tmp_path / "out", tmp_path, "--orcid", ORCID))
     assert exc.value.code == 2
     assert not (tmp_path / "out").exists()
+
+
+def test_404_means_no_profile_exit_0(entry, tmp_path, monkeypatch, capsys):
+    """HTTP 404: no such record, no data, no file (owner, 2026-11-13, as tamu-scholars)."""
+    main, _ = entry
+
+    def gone(*_args, **_kwargs):
+        raise OrcidNotFound(f"ORCID API returned HTTP 404 for {ORCID}")
+
+    monkeypatch.setattr(cli, "get_or_fetch_orcid_record", gone)
+    main(_args(tmp_path / "out", tmp_path, "--orcid", ORCID))  # returns: exit 0
+    assert not (tmp_path / "out").exists()
+    assert "has no record" in capsys.readouterr().err
+
+
+def test_fresh_404_marker_means_no_profile_under_no_fetch(entry, tmp_path, capsys):
+    main, _ = entry
+    now = datetime.now(timezone.utc).isoformat()
+    marker = {"_not_found": {"status": 404, "at": now}, "_cache_metadata": {"cached_at": now}}
+    (tmp_path / "ORCID_JSON").mkdir()
+    (tmp_path / "ORCID_JSON" / f"{ORCID}.json").write_text(json.dumps(marker))
+    main(_args(tmp_path / "out", tmp_path, "--orcid", ORCID, "--no-fetch"))
+    assert not (tmp_path / "out").exists()
+    assert "has no record" in capsys.readouterr().err
 
 
 def test_json_provenance_carries_the_cache_time(tmp_path, sample_record):

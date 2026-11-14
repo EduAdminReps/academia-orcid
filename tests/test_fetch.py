@@ -8,10 +8,12 @@ import pytest
 
 from academia_orcid.fetch import (
     OrcidFetchError,
+    OrcidNotFound,
     fetch_orcid_record,
     fetch_work_details,
     get_orcid_for_uin,
     is_cache_fresh,
+    is_not_found_marker,
     load_orcid_record,
     missing_work_details,
     validate_orcid_id,
@@ -345,13 +347,18 @@ def test_fetch_orcid_record_success(mock_requests, tmp_path):
 
 @patch("academia_orcid.fetch.requests")
 def test_fetch_orcid_record_404(mock_requests, tmp_path):
-    """Test that 404 Not Found raises OrcidFetchError."""
+    """A 404 raises OrcidNotFound and, with nothing cached, writes a marker
+    (owner, 2026-11-13, as tamu-scholars)."""
     mock_response = Mock()
     mock_response.status_code = 404
     mock_requests.get.return_value = mock_response
 
-    with pytest.raises(OrcidFetchError, match="HTTP 404"):
+    with pytest.raises(OrcidNotFound, match="HTTP 404"):
         fetch_orcid_record("0000-0009-9999-9999", tmp_path)
+
+    marker = load_orcid_record(tmp_path, "0000-0009-9999-9999")
+    assert is_not_found_marker(marker) and is_cache_fresh(marker)
+    assert not list((tmp_path / "ORCID_JSON").glob("*.tmp"))  # written whole
 
 
 @patch("academia_orcid.fetch.requests")
@@ -559,3 +566,42 @@ def test_failed_fetch_with_nothing_cached_still_raises(tmp_path, monkeypatch):
     monkeypatch.setattr(fetch, "fetch_orcid_record", fail)
     with pytest.raises(OrcidFetchError):
         fetch.get_or_fetch_orcid_record(tmp_path, "0000-0001-2345-6789")
+
+
+# ── HTTP 404: remembered, reported as no profile (owner, 2026-11-13) ──────
+
+
+@patch("academia_orcid.fetch.requests")
+def test_404_keeps_a_cached_record_and_flags_it(mock_requests, tmp_path, caplog):
+    from academia_orcid import fetch
+
+    orcid = "0000-0001-2345-6789"
+    (tmp_path / "ORCID_JSON").mkdir()
+    old = {
+        "person": {"name": "Old"},
+        "_cache_metadata": {"cached_at": "2000-01-01T00:00:00+00:00"},  # stale: refetch
+    }
+    (tmp_path / "ORCID_JSON" / f"{orcid}.json").write_text(json.dumps(old))
+    mock_requests.get.return_value = _response(404)
+
+    record = fetch.get_or_fetch_orcid_record(tmp_path, orcid)
+
+    assert record["person"] == {"name": "Old"}  # the old data stays in use
+    assert "using the record cached on 2000-01-01" in caplog.text
+    cached = load_orcid_record(tmp_path, orcid)
+    assert cached["person"] == {"name": "Old"} and cached["_not_found"]["status"] == 404
+    assert not is_not_found_marker(cached) and not is_cache_fresh(cached)
+
+
+@patch("academia_orcid.fetch.requests")
+def test_404_with_nothing_cached_reaches_the_caller(mock_requests, tmp_path):
+    from academia_orcid import fetch
+
+    mock_requests.get.return_value = _response(404)
+    with pytest.raises(OrcidNotFound):
+        fetch.get_or_fetch_orcid_record(tmp_path, "0000-0001-2345-6789")
+    # The fresh marker answers the next call without asking the API.
+    mock_requests.get.reset_mock()
+    marker = fetch.get_or_fetch_orcid_record(tmp_path, "0000-0001-2345-6789")
+    assert is_not_found_marker(marker)
+    mock_requests.get.assert_not_called()

@@ -2,7 +2,8 @@
 ORCID lookup and the record load, with one set of exit codes (hand-aligned with
 tamu-scholars' cli.py and academia-openalex's section_cli.py):
 
-- 0: done, with or without data (no data writes no file; section contract rule 5)
+- 0: done, with or without data (no data writes no file; section contract rule 5);
+  an ORCID iD the API answers 404 for is "no profile", not an error
 - 1: bad input (malformed --uin/--orcid, a malformed id in en.db,
   no --mapping-db, an en.db without ``faculty_identifiers``)
 - 2: argparse errors; the ORCID API failed with nothing cached; under
@@ -16,11 +17,15 @@ import sqlite3
 import sys
 from pathlib import Path
 
+from academia_orcid import SECTION_PUBLICATIONS, VALID_SECTIONS
 from academia_orcid.config import get_config
 from academia_orcid.fetch import (
+    NOT_FOUND_KEY,
     OrcidFetchError,
+    OrcidNotFound,
     get_or_fetch_orcid_record,
     get_orcid_for_uin,
+    is_not_found_marker,
     validate_orcid_id,
 )
 from academia_orcid.logging_config import setup_logging
@@ -43,12 +48,18 @@ def validate_uin(uin: str) -> bool:
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
-    """The flags of the section entry point (run_json.py); it adds --section."""
+    """The flags of the section entry point (run_json.py)."""
     who = parser.add_mutually_exclusive_group(required=True)
     who.add_argument("--uin", help="Faculty UIN (looked up in --mapping-db)")
     who.add_argument("--orcid", help="ORCID ID directly (bypasses the UIN→ORCID mapping)")
     parser.add_argument("--output-dir", required=True, help="Output directory")
     parser.add_argument("--data-dir", default=".", help="Base directory containing ORCID_JSON/")
+    parser.add_argument(
+        "--section",
+        default=SECTION_PUBLICATIONS,
+        choices=VALID_SECTIONS,
+        help="Section to generate: publications or data",
+    )
     fetch_group = parser.add_mutually_exclusive_group()
     fetch_group.add_argument(
         "--fetch",
@@ -155,16 +166,22 @@ def resolve_orcid_id(args: argparse.Namespace, logger: logging.Logger) -> str | 
 def load_record(args: argparse.Namespace, orcid_id: str, logger: logging.Logger) -> dict | None:
     """The ORCID record, cached or fetched as the fetch flags say.
 
-    A failed refetch falls back to a cached record (get_or_fetch_orcid_record).
-    Exits 2 when the fetch fails with nothing cached, and under --no-fetch when
-    the record is not cached (a gap in the cache is not "no data"). Returns None
-    only when a fetch returned no record.
+    Returns None for "no profile" (HTTP 404 now, or a cached 404 marker) and when
+    a fetch returned no record: no data, no file. A failed refetch falls back to
+    a cached record (get_or_fetch_orcid_record). Exits 2 when the fetch fails
+    with nothing cached, and under --no-fetch when the record is not cached (a
+    gap in the cache is not "no data").
     """
     try:
         record = get_or_fetch_orcid_record(
             Path(args.data_dir), orcid_id, fetch=args.fetch, force=args.force_fetch
         )
+    except OrcidNotFound:
+        # ORCID has no such record (HTTP 404): no data, no file (owner, 2026-11-13).
+        logger.info(f"ORCID has no record {orcid_id} (HTTP 404).")
+        return None
     except OrcidFetchError as e:
+        # A failed refetch already fell back to a cached record; there was none.
         logger.error(f"ORCID API fetch failed for {orcid_id}: {e}")
         sys.exit(2)
     if not record:
@@ -172,5 +189,11 @@ def load_record(args: argparse.Namespace, orcid_id: str, logger: logging.Logger)
             logger.error(f"ORCID record for {orcid_id} is not cached; run `just prefetch`.")
             sys.exit(2)
         logger.info(f"No ORCID record for {orcid_id}.")
+        return None
+    if is_not_found_marker(record):
+        logger.info(
+            f"ORCID has no record {orcid_id} (HTTP 404 on "
+            f"{record[NOT_FOUND_KEY].get('at', '?')[:10]})."
+        )
         return None
     return record

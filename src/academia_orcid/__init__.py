@@ -1,6 +1,6 @@
 """academia-orcid: ORCID publications and profile data as structured JSON for the faculty composer."""
 
-from .fetch import OrcidFetchError
+from .fetch import OrcidFetchError, OrcidNotFound
 
 __version__ = "0.1.0"
 
@@ -20,5 +20,6 @@ __all__ = [
     "SECTION_PUBLICATIONS",
     "VALID_SECTIONS",
     "OrcidFetchError",
+    "OrcidNotFound",
     "__version__",
 ]
