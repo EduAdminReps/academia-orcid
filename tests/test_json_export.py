@@ -14,14 +14,14 @@ def test_export_publications_all_categories():
             "title": "Journal Paper 1",
             "year": "2024",
             "doi": "10.1000/j1",
-            "authors": "A. Smith",
+            "raw_authors": ["A. Smith"],
             "venue": "Nature",
         },
         {
             "title": "Journal Paper 2",
             "year": "2023",
             "doi": "",
-            "authors": "B. Jones",
+            "raw_authors": ["B. Jones"],
             "venue": "Science",
         },
     ]
@@ -30,7 +30,7 @@ def test_export_publications_all_categories():
             "title": "Conference Paper",
             "year": "2024",
             "doi": "10.1000/c1",
-            "authors": "C. Lee",
+            "raw_authors": ["C. Lee"],
             "venue": "ICML",
         },
     ]
@@ -39,7 +39,7 @@ def test_export_publications_all_categories():
             "title": "Book Chapter",
             "year": "2022",
             "doi": "",
-            "authors": "D. Wang",
+            "raw_authors": ["D. Wang"],
             "venue": "Springer",
         },
     ]
@@ -70,7 +70,7 @@ def test_export_publications_empty_lists():
 def test_export_publications_partial_data():
     """Test export with only some categories populated."""
     journals = [
-        {"title": "Paper", "year": "2024", "doi": "", "authors": "Smith", "venue": "Journal"}
+        {"title": "Paper", "year": "2024", "doi": "", "raw_authors": ["Smith"], "venue": "Journal"}
     ]
     conferences = []
     other = []
@@ -86,7 +86,7 @@ def test_export_publications_partial_data():
 def test_export_publications_title_keeps_markup():
     """Titles keep ORCID's markup; the composer renders it per format (owner, 2026-11-13)."""
     title = "<i>Italic</i> title with <sub>subscript</sub> and $\\alpha$"
-    journals = [{"title": title, "year": "2024", "doi": "", "authors": "Smith", "venue": "J"}]
+    journals = [{"title": title, "year": "2024", "doi": "", "raw_authors": ["Smith"], "venue": "J"}]
 
     result = export_publications("0000-0001-2345-6789", journals, [], [])
 
@@ -95,7 +95,9 @@ def test_export_publications_title_keeps_markup():
 
 def test_export_publications_metadata_structure():
     """Test that metadata has required fields with correct types."""
-    journals = [{"title": "Paper", "year": "2024", "doi": "", "authors": "Smith", "venue": "J"}]
+    journals = [
+        {"title": "Paper", "year": "2024", "doi": "", "raw_authors": ["Smith"], "venue": "J"}
+    ]
 
     result = export_publications("0000-0001-2345-6789", journals, [], [])
 
@@ -118,7 +120,7 @@ def test_export_publications_preserves_all_fields():
             "title": "Title",
             "year": "2024",
             "doi": "10.1000/j1",
-            "authors": "Smith, A.",
+            "raw_authors": ["Smith, A."],
             "venue": "Nature",
             "extra": "data",
         },
@@ -129,7 +131,7 @@ def test_export_publications_preserves_all_fields():
     pub = result["journal_articles"][0]
     assert pub["year"] == "2024"
     assert pub["doi"] == "10.1000/j1"
-    assert pub["authors"] == "Smith, A."
+    assert pub["raw_authors"] == ["Smith, A."]
     assert pub["venue"] == "Nature"
     # Extra fields should be preserved
     assert pub.get("extra") == "data"
@@ -265,7 +267,12 @@ def test_export_data_metadata_structure():
 
 def test_export_publications_copies_entries_unchanged():
     """Every field as extracted, markup included; the caller's dicts are not shared."""
-    pub = {"title": "<i>Original</i>", "year": "2024", "doi": "10.1000/test", "authors": "Smith"}
+    pub = {
+        "title": "<i>Original</i>",
+        "year": "2024",
+        "doi": "10.1000/test",
+        "raw_authors": ["Smith"],
+    }
 
     result = export_publications("0000-0001-2345-6789", [pub], [], [])
 
@@ -283,7 +290,7 @@ def test_export_publications_unicode_characters():
             "title": "Übersetzung of Résumé über Ångström",
             "year": "2024",
             "doi": "",
-            "authors": "Schmidt",
+            "raw_authors": ["Schmidt"],
             "venue": "J",
         }
     ]
@@ -308,7 +315,7 @@ def test_export_data_unicode_in_biography():
 
 def test_export_publications_empty_strings():
     """Test handling of empty string fields."""
-    journals = [{"title": "", "year": "", "doi": "", "authors": "", "venue": ""}]
+    journals = [{"title": "", "year": "", "doi": "", "raw_authors": [], "venue": ""}]
 
     result = export_publications("0000-0001-2345-6789", journals, [], [])
 

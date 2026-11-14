@@ -3,8 +3,8 @@ ORCID lookup and the record load, with one set of exit codes (hand-aligned with
 tamu-scholars' cli.py and academia-openalex's section_cli.py):
 
 - 0: done, with or without data (no data writes no file; section contract rule 5)
-- 1: bad input (malformed --uin/--orcid, no --mapping-db, an en.db
-  without ``faculty_identifiers``)
+- 1: bad input (malformed --uin/--orcid, a malformed id in en.db,
+  no --mapping-db, an en.db without ``faculty_identifiers``)
 - 2: argparse errors; the ORCID API failed with nothing cached; under
   ``--no-fetch`` a mapped ORCID with no cache file
 """
@@ -106,8 +106,9 @@ def resolve_orcid_id(args: argparse.Namespace, logger: logging.Logger) -> str | 
     """The ORCID iD to report on, from --orcid or from --uin via en.db.
 
     Returns None when the UIN has no ORCID iD (no data: the caller writes no
-    file and exits 0). Exits 1 on a malformed id, a missing --mapping-db, or an
-    en.db without the ``faculty_identifiers`` table.
+    file and exits 0). Exits 1 on a malformed id (given or looked up: a wrong id
+    must not pass for "no data", as in tamu-scholars), a malformed UIN, a missing
+    --mapping-db, or an en.db without the ``faculty_identifiers`` table.
     """
     if args.orcid:
         if not validate_orcid_id(args.orcid):
@@ -141,6 +142,12 @@ def resolve_orcid_id(args: argparse.Namespace, logger: logging.Logger) -> str | 
     if not orcid_id:
         logger.info(f"No ORCID ID on file for UIN {uin}.")
         return None
+    if not validate_orcid_id(orcid_id):
+        logger.error(
+            f"Malformed ORCID iD {orcid_id!r} for UIN {uin} in faculty_identifiers "
+            "(expected XXXX-XXXX-XXXX-XXXX); fix it upstream"
+        )
+        sys.exit(1)
     logger.info(f"Found ORCID {orcid_id} for UIN {uin}")
     return orcid_id
 

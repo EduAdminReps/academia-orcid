@@ -112,6 +112,27 @@ def test_neither_uin_nor_orcid_is_rejected(entry, tmp_path, data_dir):
     assert exc.value.code == 2
 
 
+def test_malformed_id_in_en_db_exits_1(entry, tmp_path, data_dir, capsys):
+    """A wrong id must not pass for "no data" (tamu-scholars' rule, audit SCH-12)."""
+    main, _ = entry
+    bad = tmp_path / "bad.db"
+    conn = sqlite3.connect(bad)
+    conn.execute(
+        "CREATE TABLE faculty_identifiers (UIN TEXT, Scheme TEXT, Identifier TEXT, Rank INTEGER)"
+    )
+    conn.execute(
+        "INSERT INTO faculty_identifiers VALUES (?, 'orcid', ?, 1)",
+        ("123456789", f"https://orcid.org/{ORCID}"),
+    )
+    conn.commit()
+    conn.close()
+    with pytest.raises(SystemExit) as exc:
+        main(_args(tmp_path / "out", data_dir, "--uin", "123456789", "--mapping-db", str(bad)))
+    assert exc.value.code == 1
+    assert "Malformed ORCID iD" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
+
+
 def test_pre_v17_db_exits_1_with_a_message(entry, tmp_path, data_dir, capsys):
     main, _ = entry
     old = tmp_path / "old.db"

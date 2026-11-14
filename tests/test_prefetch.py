@@ -162,6 +162,12 @@ class TestMain:
     def test_missing_db(self, tmp_path):
         assert pf.main(["--mapping-db", str(tmp_path / "nope.db")]) == 1
 
+    def test_malformed_id_in_the_mapping_exits_1(self, tmp_path):
+        """A wrong id must not pass for success (tamu-scholars' rule, audit SCH-12)."""
+        db = _db(tmp_path, [("111111111", "https://orcid.org/0000-0001-0000-0001")])
+        args = ["--mapping-db", str(db), "--data-dir", str(tmp_path), "--dry-run"]
+        assert pf.main(args) == 1
+
     def test_pre_v17_db_exits_1(self, tmp_path, caplog):
         old = tmp_path / "old.db"
         sqlite3.connect(old).close()

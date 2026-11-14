@@ -18,7 +18,8 @@ Usage (through the justfile, which supplies --mapping-db):
     just prefetch --force                  # refetch even fresh records
     just prefetch --dry-run                # list what would be fetched
 
-Exit code: 0 when every record is cached and fresh, 1 when any fetch failed.
+Exit code: 0 when every record is cached and fresh, 1 when any fetch failed or
+the mapping holds a malformed id (as tamu-scholars).
 """
 
 import argparse
@@ -297,7 +298,12 @@ def main(argv: list[str] | None = None, default_data_dir: Path | None = None) ->
         return 130
 
     logger.info(f"Done: {_summary(counts) or 'nothing to do'}")
-    return 1 if counts["failed"] else 0
+    if counts["invalid"]:
+        logger.error(
+            f"{counts['invalid']} malformed ORCID iD(s) in faculty_identifiers: fix them "
+            "upstream (coe-data-core ingest)"
+        )
+    return 1 if counts["failed"] or counts["invalid"] else 0
 
 
 if __name__ == "__main__":

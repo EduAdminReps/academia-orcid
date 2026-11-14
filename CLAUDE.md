@@ -46,11 +46,16 @@ python run_json.py --orcid 0000-0002-2983-9884 --output-dir <dir> --section data
 - Exactly one of `--uin` (looked up in `--mapping-db`) and `--orcid`.
 - **No period flag** (2026-11-13): every publication is written, with its `year`
   and `month`; the composer keeps the report period's.
-- **Exit codes:** 0 done, with or without data; 1 bad input (malformed id,
-  no `--mapping-db`, an en.db without `faculty_identifiers`, i.e. older than schema
-  v17); 2 argparse errors, a fetch that failed with nothing cached, `--no-fetch`
-  with nothing cached ("run `just prefetch`": a cache gap is not "no data"). A
-  failed refetch uses the cached record, with a warning.
+- **Exit codes:** 0 done, with or without data; 1 bad input (a malformed id,
+  given or in `faculty_identifiers`: a wrong id never passes for "no data", as in
+  tamu-scholars; no `--mapping-db`; an en.db without `faculty_identifiers`, i.e.
+  older than schema v17); 2 argparse errors, a fetch that failed with nothing
+  cached, `--no-fetch` with nothing cached ("run `just prefetch`": a cache gap is
+  not "no data"). A failed refetch uses the cached record, with a warning.
+- **HTTP 404 is a failure here** (exit 2; prefetch `failed`), unlike tamu-scholars
+  and academia-openalex, where it means "no such profile" and is remembered. ORCID
+  iDs are persistent, so a 404 points at a wrong iD in the mapping rather than a
+  profile that went away. None so far: all 453 mapped iDs are cached (2026-11-13).
 
 ## The JSON
 
@@ -109,7 +114,8 @@ just prefetch --dept MEEN | --uin 123456789 | --uin-file nominees.txt   # union;
 Records are written whole (temporary file renamed), so a stopped run resumes. A
 work whose detail call fails keeps its summary (no contributors); the record is
 `partial`, stale, and retried next run. Outcomes: `fetched`, `partial`, `fresh`,
-`failed`, `invalid`; exit 1 if any failed. About 6 works/s: ~290 ORCIDs in an hour.
+`failed`, `invalid`; exit 1 if any failed or the mapping holds a malformed iD
+(as tamu-scholars). About 6 works/s: ~290 ORCIDs in an hour.
 
 ## Shared code (with tamu-scholars and academia-openalex)
 
@@ -121,6 +127,8 @@ work whose detail call fails keeps its summary (no contributors); the record is
   `collapse_duplicates`. A change to one is
   checked against the others unless source-specific. Nothing is vendored from
   coe-data-core any more: the period and the rendering are the composer's.
+- **The three as a group** (what is shared, what differs, curated vs aggregated):
+  `../README.md`, "Publication sources".
 
 ## Development
 

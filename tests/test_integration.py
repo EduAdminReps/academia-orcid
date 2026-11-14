@@ -1,4 +1,4 @@
-"""Integration tests for end-to-end pipelines."""
+"""End-to-end tests of the section entry point (run_json.py): en.db, cache, JSON file."""
 
 import json
 import sqlite3
@@ -49,11 +49,11 @@ def integration_setup(tmp_path, sample_record):
     }
 
 
-# ── Full LaTeX Pipeline ───────────────────────────────────────────────────
+# ── Full Pipeline ─────────────────────────────────────────────────────────
 
 
-def test_full_latex_pipeline_with_uin(monkeypatch, integration_setup, capsys):
-    """Test complete LaTeX pipeline: UIN → ORCID → extract → LaTeX."""
+def test_full_pipeline_with_uin(monkeypatch, integration_setup, capsys):
+    """UIN → ORCID iD (en.db) → cached record → orcid-publications.json."""
     setup = integration_setup
 
     monkeypatch.setattr(
@@ -91,8 +91,8 @@ def test_full_latex_pipeline_with_uin(monkeypatch, integration_setup, capsys):
     assert "Generated:" in captured.err
 
 
-def test_full_latex_pipeline_with_orcid(monkeypatch, integration_setup):
-    """Test LaTeX pipeline with direct ORCID ID (no UIN mapping)."""
+def test_full_pipeline_with_orcid(monkeypatch, integration_setup):
+    """A direct ORCID iD (no UIN mapping)."""
     setup = integration_setup
 
     monkeypatch.setattr(
@@ -119,8 +119,8 @@ def test_full_latex_pipeline_with_orcid(monkeypatch, integration_setup):
     assert "A Journal Paper" in content
 
 
-def test_full_latex_pipeline_data_section(monkeypatch, integration_setup):
-    """Test LaTeX pipeline for data section."""
+def test_full_pipeline_data_section(monkeypatch, integration_setup):
+    """The profile data section (orcid-data.json)."""
     setup = integration_setup
 
     monkeypatch.setattr(
@@ -148,9 +148,6 @@ def test_full_latex_pipeline_data_section(monkeypatch, integration_setup):
     content = output_file.read_text()
     assert "Texas A" in content  # Employment
     assert "MIT" in content  # Education
-
-
-# ── Period Filtering End-to-End ───────────────────────────────────────────
 
 
 # ── Cache Behavior ────────────────────────────────────────────────────────
@@ -326,7 +323,7 @@ def test_integration_publications_and_data_separate(monkeypatch, integration_set
     assert data_file.exists()
 
 
-# ── LaTeX Output Validation ───────────────────────────────────────────────
+# ── Repeated Runs ─────────────────────────────────────────────────────────
 
 
 def test_integration_multiple_runs_overwrite(monkeypatch, integration_setup):
@@ -508,7 +505,7 @@ def test_integration_run_json_entry_point(monkeypatch, integration_setup):
 
 
 def test_integration_run_json_no_fetch_with_missing_cache_fails(monkeypatch, tmp_path, capsys):
-    """JSON and LaTeX agree: under --no-fetch an uncached record fails the section (exit 2)."""
+    """Under --no-fetch an uncached record fails the section (exit 2), and writes no file."""
     sys.path.insert(0, str(Path(__file__).parent.parent))
     import run_json
 
